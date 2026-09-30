@@ -4,6 +4,7 @@ import {
   createPublicId,
   hasPublicIdPrefix,
   isPublicId,
+  isSystemThemeCode,
   isUtcIsoTimestamp,
   isValidCatalogueSlug,
   isValidItemSlug,
@@ -79,6 +80,11 @@ describe("domain primitives", () => {
     expect(classifyAssetMimeType("application/pdf")).toBe("document");
     expect(classifyAssetMimeType("image/svg+xml")).toBeNull();
     expect(classifyAssetMimeType("application/x-msdownload")).toBeNull();
+  });
+
+  it("recognizes the controlled Professional theme", () => {
+    expect(isSystemThemeCode("professional")).toBe(true);
+    expect(isSystemThemeCode("custom-html")).toBe(false);
   });
 
   it("rejects invalid Date values", () => {
