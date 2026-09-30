@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransitionEnquiryStatus,
+  canTransitionModerationStatus,
   classifyAssetMimeType,
   createPublicId,
   hasPublicIdPrefix,
   isEntitlementValueType,
   isEnquiryStatus,
+  isModerationStatus,
   isPublicationState,
   isPublicId,
   isSubscriptionStatus,
@@ -64,7 +66,7 @@ describe("domain primitives", () => {
     expect(isValidCatalogueSlug("Acme")).toBe(false);
   });
 
-  it("creates catalogue, category, item, attribute, asset, publication, enquiry, and subscription public IDs", () => {
+  it("creates catalogue, category, item, attribute, asset, publication, enquiry, subscription, and moderation public IDs", () => {
     expect(createPublicId("cat")).toMatch(/^cat_[0-9a-f]{32}$/);
     expect(createPublicId("ctg")).toMatch(/^ctg_[0-9a-f]{32}$/);
     expect(createPublicId("itm")).toMatch(/^itm_[0-9a-f]{32}$/);
@@ -73,6 +75,7 @@ describe("domain primitives", () => {
     expect(createPublicId("pub")).toMatch(/^pub_[0-9a-f]{32}$/);
     expect(createPublicId("enq")).toMatch(/^enq_[0-9a-f]{32}$/);
     expect(createPublicId("sub")).toMatch(/^sub_[0-9a-f]{32}$/);
+    expect(createPublicId("mod")).toMatch(/^mod_[0-9a-f]{32}$/);
   });
 
   it("normalizes and validates item slugs independently", () => {
@@ -130,6 +133,19 @@ describe("domain primitives", () => {
     expect(subscriptionGrantsEntitlements("active")).toBe(true);
     expect(subscriptionGrantsEntitlements("past_due")).toBe(false);
     expect(subscriptionGrantsEntitlements("canceled")).toBe(false);
+  });
+
+  it("recognizes moderation statuses and forward-only transitions", () => {
+    expect(isModerationStatus("open")).toBe(true);
+    expect(isModerationStatus("reviewing")).toBe(true);
+    expect(isModerationStatus("resolved")).toBe(true);
+    expect(isModerationStatus("dismissed")).toBe(true);
+    expect(isModerationStatus("pending")).toBe(false);
+
+    expect(canTransitionModerationStatus("open", "reviewing")).toBe(true);
+    expect(canTransitionModerationStatus("open", "resolved")).toBe(true);
+    expect(canTransitionModerationStatus("reviewing", "dismissed")).toBe(true);
+    expect(canTransitionModerationStatus("resolved", "open")).toBe(false);
   });
 
   it("rejects invalid Date values", () => {
