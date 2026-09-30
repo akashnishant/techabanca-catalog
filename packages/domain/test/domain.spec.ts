@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  classifyAssetMimeType,
   createPublicId,
   hasPublicIdPrefix,
   isPublicId,
@@ -56,11 +57,12 @@ describe("domain primitives", () => {
     expect(isValidCatalogueSlug("Acme")).toBe(false);
   });
 
-  it("creates catalogue, category, item, and attribute public IDs", () => {
+  it("creates catalogue, category, item, attribute, and asset public IDs", () => {
     expect(createPublicId("cat")).toMatch(/^cat_[0-9a-f]{32}$/);
     expect(createPublicId("ctg")).toMatch(/^ctg_[0-9a-f]{32}$/);
     expect(createPublicId("itm")).toMatch(/^itm_[0-9a-f]{32}$/);
     expect(createPublicId("atr")).toMatch(/^atr_[0-9a-f]{32}$/);
+    expect(createPublicId("ast")).toMatch(/^ast_[0-9a-f]{32}$/);
   });
 
   it("normalizes and validates item slugs independently", () => {
@@ -69,6 +71,14 @@ describe("domain primitives", () => {
     );
     expect(isValidItemSlug("heavy-duty-pump-5hp")).toBe(true);
     expect(isValidItemSlug("-invalid")).toBe(false);
+  });
+
+  it("classifies supported catalogue asset MIME types", () => {
+    expect(classifyAssetMimeType("image/jpeg")).toBe("image");
+    expect(classifyAssetMimeType(" IMAGE/WEBP ")).toBe("image");
+    expect(classifyAssetMimeType("application/pdf")).toBe("document");
+    expect(classifyAssetMimeType("image/svg+xml")).toBeNull();
+    expect(classifyAssetMimeType("application/x-msdownload")).toBeNull();
   });
 
   it("rejects invalid Date values", () => {
