@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  canTransitionEnquiryStatus,
   classifyAssetMimeType,
   createPublicId,
   hasPublicIdPrefix,
+  isEnquiryStatus,
   isPublicationState,
   isPublicId,
   isSystemThemeCode,
@@ -59,13 +61,14 @@ describe("domain primitives", () => {
     expect(isValidCatalogueSlug("Acme")).toBe(false);
   });
 
-  it("creates catalogue, category, item, attribute, asset, and publication public IDs", () => {
+  it("creates catalogue, category, item, attribute, asset, publication, and enquiry public IDs", () => {
     expect(createPublicId("cat")).toMatch(/^cat_[0-9a-f]{32}$/);
     expect(createPublicId("ctg")).toMatch(/^ctg_[0-9a-f]{32}$/);
     expect(createPublicId("itm")).toMatch(/^itm_[0-9a-f]{32}$/);
     expect(createPublicId("atr")).toMatch(/^atr_[0-9a-f]{32}$/);
     expect(createPublicId("ast")).toMatch(/^ast_[0-9a-f]{32}$/);
     expect(createPublicId("pub")).toMatch(/^pub_[0-9a-f]{32}$/);
+    expect(createPublicId("enq")).toMatch(/^enq_[0-9a-f]{32}$/);
   });
 
   it("normalizes and validates item slugs independently", () => {
@@ -94,6 +97,18 @@ describe("domain primitives", () => {
     expect(isPublicationState("active")).toBe(true);
     expect(isPublicationState("retired")).toBe(true);
     expect(isPublicationState("draft")).toBe(false);
+  });
+
+  it("recognizes enquiry statuses and forward-only transitions", () => {
+    expect(isEnquiryStatus("new")).toBe(true);
+    expect(isEnquiryStatus("contacted")).toBe(true);
+    expect(isEnquiryStatus("closed")).toBe(true);
+    expect(isEnquiryStatus("open")).toBe(false);
+
+    expect(canTransitionEnquiryStatus("new", "contacted")).toBe(true);
+    expect(canTransitionEnquiryStatus("new", "closed")).toBe(true);
+    expect(canTransitionEnquiryStatus("contacted", "closed")).toBe(true);
+    expect(canTransitionEnquiryStatus("closed", "contacted")).toBe(false);
   });
 
   it("rejects invalid Date values", () => {
