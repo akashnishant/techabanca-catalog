@@ -1,6 +1,11 @@
 import { Hono } from "hono";
+import { createAuthRoutes } from "./routes/auth-routes";
 
-const app = new Hono();
+type CatalogueAppEnv = {
+  Bindings: Env;
+};
+
+const app = new Hono<CatalogueAppEnv>();
 
 app.get("/api/health", (c) =>
   c.json({
@@ -8,5 +13,7 @@ app.get("/api/health", (c) =>
     service: "techabanca-catalogue-app",
   }),
 );
+
+app.route("/api/v1/auth", createAuthRoutes());
 
 export default app;
