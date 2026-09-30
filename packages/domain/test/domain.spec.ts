@@ -3,6 +3,7 @@ import {
   classifyAssetMimeType,
   createPublicId,
   hasPublicIdPrefix,
+  isPublicationState,
   isPublicId,
   isSystemThemeCode,
   isUtcIsoTimestamp,
@@ -58,12 +59,13 @@ describe("domain primitives", () => {
     expect(isValidCatalogueSlug("Acme")).toBe(false);
   });
 
-  it("creates catalogue, category, item, attribute, and asset public IDs", () => {
+  it("creates catalogue, category, item, attribute, asset, and publication public IDs", () => {
     expect(createPublicId("cat")).toMatch(/^cat_[0-9a-f]{32}$/);
     expect(createPublicId("ctg")).toMatch(/^ctg_[0-9a-f]{32}$/);
     expect(createPublicId("itm")).toMatch(/^itm_[0-9a-f]{32}$/);
     expect(createPublicId("atr")).toMatch(/^atr_[0-9a-f]{32}$/);
     expect(createPublicId("ast")).toMatch(/^ast_[0-9a-f]{32}$/);
+    expect(createPublicId("pub")).toMatch(/^pub_[0-9a-f]{32}$/);
   });
 
   it("normalizes and validates item slugs independently", () => {
@@ -85,6 +87,13 @@ describe("domain primitives", () => {
   it("recognizes the controlled Professional theme", () => {
     expect(isSystemThemeCode("professional")).toBe(true);
     expect(isSystemThemeCode("custom-html")).toBe(false);
+  });
+
+  it("recognizes publication lifecycle states", () => {
+    expect(isPublicationState("building")).toBe(true);
+    expect(isPublicationState("active")).toBe(true);
+    expect(isPublicationState("retired")).toBe(true);
+    expect(isPublicationState("draft")).toBe(false);
   });
 
   it("rejects invalid Date values", () => {
