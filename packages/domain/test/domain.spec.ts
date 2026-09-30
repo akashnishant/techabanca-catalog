@@ -5,7 +5,9 @@ import {
   isPublicId,
   isUtcIsoTimestamp,
   isValidCatalogueSlug,
+  isValidItemSlug,
   normalizeCatalogueSlug,
+  normalizeItemSlug,
   tenantContextFromResolvedMembership,
   toUtcIsoTimestamp,
   utcNow,
@@ -54,9 +56,19 @@ describe("domain primitives", () => {
     expect(isValidCatalogueSlug("Acme")).toBe(false);
   });
 
-  it("creates catalogue and category public IDs", () => {
+  it("creates catalogue, category, item, and attribute public IDs", () => {
     expect(createPublicId("cat")).toMatch(/^cat_[0-9a-f]{32}$/);
     expect(createPublicId("ctg")).toMatch(/^ctg_[0-9a-f]{32}$/);
+    expect(createPublicId("itm")).toMatch(/^itm_[0-9a-f]{32}$/);
+    expect(createPublicId("atr")).toMatch(/^atr_[0-9a-f]{32}$/);
+  });
+
+  it("normalizes and validates item slugs independently", () => {
+    expect(normalizeItemSlug("  Heavy Duty Pump / 5HP  ")).toBe(
+      "heavy-duty-pump-5hp",
+    );
+    expect(isValidItemSlug("heavy-duty-pump-5hp")).toBe(true);
+    expect(isValidItemSlug("-invalid")).toBe(false);
   });
 
   it("rejects invalid Date values", () => {

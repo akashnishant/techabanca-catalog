@@ -5,6 +5,8 @@ export const PUBLIC_ID_PREFIXES = [
   "mem",
   "cat",
   "ctg",
+  "itm",
+  "atr",
 ] as const;
 
 export type PublicIdPrefix = (typeof PUBLIC_ID_PREFIXES)[number];
@@ -16,7 +18,7 @@ export type PublicId<TPrefix extends PublicIdPrefix = PublicIdPrefix> =
     readonly [publicIdBrand]: TPrefix;
   };
 
-const PUBLIC_ID_PATTERN = /^(usr|ses|org|mem|cat|ctg)_[0-9a-f]{32}$/;
+const PUBLIC_ID_PATTERN = /^(usr|ses|org|mem|cat|ctg|itm|atr)_[0-9a-f]{32}$/;
 
 export function createPublicId<TPrefix extends PublicIdPrefix>(
   prefix: TPrefix,
