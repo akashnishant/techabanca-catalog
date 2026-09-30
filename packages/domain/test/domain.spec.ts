@@ -4,15 +4,18 @@ import {
   classifyAssetMimeType,
   createPublicId,
   hasPublicIdPrefix,
+  isEntitlementValueType,
   isEnquiryStatus,
   isPublicationState,
   isPublicId,
+  isSubscriptionStatus,
   isSystemThemeCode,
   isUtcIsoTimestamp,
   isValidCatalogueSlug,
   isValidItemSlug,
   normalizeCatalogueSlug,
   normalizeItemSlug,
+  subscriptionGrantsEntitlements,
   tenantContextFromResolvedMembership,
   toUtcIsoTimestamp,
   utcNow,
@@ -61,7 +64,7 @@ describe("domain primitives", () => {
     expect(isValidCatalogueSlug("Acme")).toBe(false);
   });
 
-  it("creates catalogue, category, item, attribute, asset, publication, and enquiry public IDs", () => {
+  it("creates catalogue, category, item, attribute, asset, publication, enquiry, and subscription public IDs", () => {
     expect(createPublicId("cat")).toMatch(/^cat_[0-9a-f]{32}$/);
     expect(createPublicId("ctg")).toMatch(/^ctg_[0-9a-f]{32}$/);
     expect(createPublicId("itm")).toMatch(/^itm_[0-9a-f]{32}$/);
@@ -69,6 +72,7 @@ describe("domain primitives", () => {
     expect(createPublicId("ast")).toMatch(/^ast_[0-9a-f]{32}$/);
     expect(createPublicId("pub")).toMatch(/^pub_[0-9a-f]{32}$/);
     expect(createPublicId("enq")).toMatch(/^enq_[0-9a-f]{32}$/);
+    expect(createPublicId("sub")).toMatch(/^sub_[0-9a-f]{32}$/);
   });
 
   it("normalizes and validates item slugs independently", () => {
@@ -109,6 +113,23 @@ describe("domain primitives", () => {
     expect(canTransitionEnquiryStatus("new", "closed")).toBe(true);
     expect(canTransitionEnquiryStatus("contacted", "closed")).toBe(true);
     expect(canTransitionEnquiryStatus("closed", "contacted")).toBe(false);
+  });
+
+  it("recognizes subscription and entitlement primitives", () => {
+    expect(isSubscriptionStatus("trialing")).toBe(true);
+    expect(isSubscriptionStatus("active")).toBe(true);
+    expect(isSubscriptionStatus("past_due")).toBe(true);
+    expect(isSubscriptionStatus("paused")).toBe(false);
+
+    expect(isEntitlementValueType("boolean")).toBe(true);
+    expect(isEntitlementValueType("integer")).toBe(true);
+    expect(isEntitlementValueType("string")).toBe(true);
+    expect(isEntitlementValueType("number")).toBe(false);
+
+    expect(subscriptionGrantsEntitlements("trialing")).toBe(true);
+    expect(subscriptionGrantsEntitlements("active")).toBe(true);
+    expect(subscriptionGrantsEntitlements("past_due")).toBe(false);
+    expect(subscriptionGrantsEntitlements("canceled")).toBe(false);
   });
 
   it("rejects invalid Date values", () => {
