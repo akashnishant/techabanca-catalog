@@ -4,6 +4,8 @@ import {
   hasPublicIdPrefix,
   isPublicId,
   isUtcIsoTimestamp,
+  isValidCatalogueSlug,
+  normalizeCatalogueSlug,
   tenantContextFromResolvedMembership,
   toUtcIsoTimestamp,
   utcNow,
@@ -36,6 +38,25 @@ describe("domain primitives", () => {
     expect(utcNow(() => instant)).toBe("2026-09-30T12:34:56.789Z");
     expect(isUtcIsoTimestamp("2026-09-30T12:34:56.789Z")).toBe(true);
     expect(isUtcIsoTimestamp("2026-09-30 12:34:56")).toBe(false);
+  });
+
+  it("normalizes catalogue subdomain slugs", () => {
+    expect(normalizeCatalogueSlug("  Caf\u00E9 & Office Supplies  ")).toBe(
+      "cafe-office-supplies",
+    );
+    expect(normalizeCatalogueSlug("ACME---INDIA")).toBe("acme-india");
+  });
+
+  it("validates canonical catalogue slugs", () => {
+    expect(isValidCatalogueSlug("acme-industries")).toBe(true);
+    expect(isValidCatalogueSlug("ab")).toBe(false);
+    expect(isValidCatalogueSlug("-acme")).toBe(false);
+    expect(isValidCatalogueSlug("Acme")).toBe(false);
+  });
+
+  it("creates catalogue and category public IDs", () => {
+    expect(createPublicId("cat")).toMatch(/^cat_[0-9a-f]{32}$/);
+    expect(createPublicId("ctg")).toMatch(/^ctg_[0-9a-f]{32}$/);
   });
 
   it("rejects invalid Date values", () => {
