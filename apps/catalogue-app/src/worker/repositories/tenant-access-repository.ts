@@ -1,20 +1,27 @@
 import {
   tenantContextFromResolvedMembership,
+  type OrganizationMemberRole,
   type TenantContext,
 } from "@techabanca/domain";
 
-type ResolvedTenantRow = {
+type ResolvedTenantAccessRow = {
   organization_id: number;
   organization_public_id: string;
+  role: OrganizationMemberRole;
+};
+
+export type ResolvedTenantAccess = {
+  tenant: TenantContext;
+  role: OrganizationMemberRole;
 };
 
 export class TenantAccessRepository {
   constructor(private readonly db: D1Database) {}
 
-  async resolveForUser(
+  async resolveAccessForUser(
     userId: number,
     organizationPublicId: string,
-  ): Promise<TenantContext | null> {
+  ): Promise<ResolvedTenantAccess | null> {
     if (!Number.isSafeInteger(userId) || userId <= 0) {
       return null;
     }
@@ -23,7 +30,8 @@ export class TenantAccessRepository {
       .prepare(
         `SELECT
            o.id AS organization_id,
-           o.public_id AS organization_public_id
+           o.public_id AS organization_public_id,
+           m.role
          FROM organizations o
          INNER JOIN organization_members m
            ON m.organization_id = o.id
@@ -39,15 +47,30 @@ export class TenantAccessRepository {
          LIMIT 1`,
       )
       .bind(userId, organizationPublicId)
-      .first<ResolvedTenantRow>();
+      .first<ResolvedTenantAccessRow>();
 
     if (!row) {
       return null;
     }
 
-    return tenantContextFromResolvedMembership({
-      organizationId: row.organization_id,
-      organizationPublicId: row.organization_public_id,
-    });
+    return {
+      tenant: tenantContextFromResolvedMembership({
+        organizationId: row.organization_id,
+        organizationPublicId: row.organization_public_id,
+      }),
+      role: row.role,
+    };
+  }
+
+  async resolveForUser(
+    userId: number,
+    organizationPublicId: string,
+  ): Promise<TenantContext | null> {
+    const access = await this.resolveAccessForUser(
+      userId,
+      organizationPublicId,
+    );
+
+    return access?.tenant ?? null;
   }
 }

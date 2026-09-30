@@ -1,3 +1,9 @@
+import {
+  isOrganizationMemberRole,
+  isOrganizationMemberStatus,
+  isUserStatus,
+  normalizeLoginEmail,
+} from "../src";
 import { describe, expect, it } from "vitest";
 import {
   canTransitionEnquiryStatus,
@@ -146,6 +152,26 @@ describe("domain primitives", () => {
     expect(canTransitionModerationStatus("open", "resolved")).toBe(true);
     expect(canTransitionModerationStatus("reviewing", "dismissed")).toBe(true);
     expect(canTransitionModerationStatus("resolved", "open")).toBe(false);
+  });
+
+  it("recognizes authentication and membership primitives", () => {
+    expect(isUserStatus("active")).toBe(true);
+    expect(isUserStatus("suspended")).toBe(true);
+    expect(isUserStatus("deleted")).toBe(false);
+
+    expect(isOrganizationMemberRole("owner")).toBe(true);
+    expect(isOrganizationMemberRole("admin")).toBe(true);
+    expect(isOrganizationMemberRole("editor")).toBe(true);
+    expect(isOrganizationMemberRole("viewer")).toBe(false);
+
+    expect(isOrganizationMemberStatus("active")).toBe(true);
+    expect(isOrganizationMemberStatus("invited")).toBe(true);
+    expect(isOrganizationMemberStatus("suspended")).toBe(true);
+    expect(isOrganizationMemberStatus("removed")).toBe(false);
+
+    expect(normalizeLoginEmail("  Owner@Example.COM ")).toBe(
+      "owner@example.com",
+    );
   });
 
   it("rejects invalid Date values", () => {
