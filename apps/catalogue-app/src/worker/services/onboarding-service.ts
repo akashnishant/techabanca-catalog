@@ -1,6 +1,7 @@
-import type {
-  OrganizationMemberRole,
-  TenantContext,
+import {
+  createPublicId,
+  type OrganizationMemberRole,
+  type TenantContext,
 } from "@techabanca/domain";
 import type {
   OnboardingRepository,
@@ -34,6 +35,23 @@ export type OnboardingBusinessTypeResult =
       kind: "unavailable";
     };
 
+export type OnboardingCatalogueMode =
+  | "products"
+  | "services"
+  | "both";
+
+export type OnboardingCatalogueModeResult =
+  | {
+      kind: "updated";
+      state: OnboardingState;
+    }
+  | {
+      kind: "forbidden";
+    }
+  | {
+      kind: "prerequisite_required";
+    };
+
 function cleanRequiredText(
   value: string,
 ): string {
@@ -49,6 +67,58 @@ export class OnboardingService {
     tenant: TenantContext,
   ): Promise<OnboardingState> {
     return this.repository.getState(tenant);
+  }
+
+  async updateCatalogueMode(
+    tenant: TenantContext,
+    role: OrganizationMemberRole,
+    mode: OnboardingCatalogueMode,
+    now: Date,
+  ): Promise<OnboardingCatalogueModeResult> {
+    if (role === "editor") {
+      return {
+        kind: "forbidden",
+      };
+    }
+
+    if (Number.isNaN(now.getTime())) {
+      throw new Error("invalid_date");
+    }
+
+    const state =
+      await this.repository.getState(tenant);
+
+    if (
+      !state.progress.identityComplete
+      || !state.progress.businessTypeComplete
+    ) {
+      return {
+        kind: "prerequisite_required",
+      };
+    }
+
+    const publicId =
+      state.catalogue?.id
+      ?? createPublicId("cat");
+
+    const internalSlug =
+      `draft-${publicId.slice(4).toLowerCase()}`;
+
+    await this.repository.upsertCatalogueMode(
+      tenant,
+      {
+        publicId,
+        name: state.profile.businessName,
+        internalSlug,
+        mode,
+        updatedAt: now.toISOString(),
+      },
+    );
+
+    return {
+      kind: "updated",
+      state: await this.repository.getState(tenant),
+    };
   }
 
   async updateBusinessType(

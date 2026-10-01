@@ -174,6 +174,36 @@ async function createFixture() {
   );
 }
 
+async function completeOnboardingPrerequisites() {
+  await env.DB.batch([
+    env.DB
+      .prepare(
+        `UPDATE organizations
+         SET
+           country_code = 'IN',
+           business_type_id = (
+             SELECT id
+             FROM business_types
+             WHERE code = 'manufacturer'
+             LIMIT 1
+           ),
+           updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(NOW, ORG_ID),
+    env.DB
+      .prepare(
+        `UPDATE business_profiles
+         SET
+           city = 'Mumbai',
+           country_code = 'IN',
+           updated_at = ?
+         WHERE organization_id = ?`,
+      )
+      .bind(NOW, ORG_ID),
+  ]);
+}
+
 async function sessionCookie(
   userId: number,
 ): Promise<string> {
@@ -533,6 +563,260 @@ describe("onboarding HTTP foundation", () => {
     expect(
       organization?.business_type_id,
     ).toBeNull();
+  });
+
+  it("creates a draft catalogue when an owner selects catalogue mode", async () => {
+    await completeOnboardingPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/catalogue-mode",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mode: "both",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json<{
+      data: {
+        catalogue: {
+          id: string;
+          name: string;
+          slug: string | null;
+          slugClaimed: boolean;
+          mode: string;
+          status: string;
+        } | null;
+        progress: {
+          catalogueStarted: boolean;
+        };
+      };
+    }>();
+
+    expect(body.data.catalogue).not.toBeNull();
+    expect(body.data.catalogue?.id).toMatch(
+      /^cat_[a-f0-9]{32}$/,
+    );
+    expect(body.data.catalogue).toMatchObject({
+      name: "Starter Business",
+      slug: null,
+      slugClaimed: false,
+      mode: "both",
+      status: "draft",
+    });
+    expect(
+      body.data.progress.catalogueStarted,
+    ).toBe(true);
+
+    const persisted = await env.DB
+      .prepare(
+        `SELECT
+           public_id,
+           slug,
+           mode,
+           status
+         FROM catalogues
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{
+        public_id: string;
+        slug: string;
+        mode: string;
+        status: string;
+      }>();
+
+    expect(persisted?.public_id).toBe(
+      body.data.catalogue?.id,
+    );
+    expect(persisted?.slug).toMatch(
+      /^draft-[a-f0-9]{32}$/,
+    );
+    expect(persisted).toMatchObject({
+      mode: "both",
+      status: "draft",
+    });
+  });
+
+  it("updates catalogue mode without creating a second catalogue", async () => {
+    await completeOnboardingPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    for (const mode of ["products", "services"]) {
+      const response = await exports.default.fetch(
+        new Request(
+          "https://catalogue.test/api/v1/onboarding/catalogue-mode",
+          {
+            method: "PATCH",
+            headers: {
+              ...tenantHeaders(cookie),
+              Origin: "https://catalogue.test",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              mode,
+            }),
+          },
+        ),
+      );
+
+      expect(response.status).toBe(200);
+    }
+
+    const rows = await env.DB
+      .prepare(
+        `SELECT mode
+         FROM catalogues
+         WHERE organization_id = ?
+           AND deleted_at IS NULL
+         ORDER BY id`,
+      )
+      .bind(ORG_ID)
+      .all<{ mode: string }>();
+
+    expect(rows.results).toEqual([
+      {
+        mode: "services",
+      },
+    ]);
+  });
+
+  it("requires completed identity and business type before catalogue mode", async () => {
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/catalogue-mode",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mode: "products",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "onboarding_prerequisite_required",
+    );
+
+    const count = await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM catalogues
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{ count: number }>();
+
+    expect(count?.count).toBe(0);
+  });
+
+  it("rejects invalid catalogue modes", async () => {
+    await completeOnboardingPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/catalogue-mode",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mode: "inventory",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "invalid_request",
+    );
+  });
+
+  it("prevents editors from starting a catalogue", async () => {
+    await completeOnboardingPrerequisites();
+
+    const cookie = await sessionCookie(EDITOR_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/catalogue-mode",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            mode: "products",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(403);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "insufficient_permissions",
+    );
+
+    const count = await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM catalogues
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{ count: number }>();
+
+    expect(count?.count).toBe(0);
   });
 
   it("rejects malformed identity input", async () => {

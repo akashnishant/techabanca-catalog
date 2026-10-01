@@ -25,7 +25,8 @@ export type OnboardingBusinessTypeAttribute = {
 export type OnboardingCatalogueSummary = {
   id: string;
   name: string;
-  slug: string;
+  slug: string | null;
+  slugClaimed: boolean;
   mode: "products" | "services" | "both";
   status:
     | "draft"
@@ -261,7 +262,11 @@ export class OnboardingRepository {
         ? {
             id: catalogue.public_id,
             name: catalogue.name,
-            slug: catalogue.slug,
+            slug: catalogue.slug.startsWith("draft-")
+              ? null
+              : catalogue.slug,
+            slugClaimed:
+              !catalogue.slug.startsWith("draft-"),
             mode: catalogue.mode,
             status: catalogue.status,
           }
@@ -301,6 +306,77 @@ export class OnboardingRepository {
         catalogueStarted: catalogue !== null,
       },
     };
+  }
+
+  async upsertCatalogueMode(
+    tenant: TenantContext,
+    input: {
+      publicId: string;
+      name: string;
+      internalSlug: string;
+      mode: "products" | "services" | "both";
+      updatedAt: string;
+    },
+  ): Promise<void> {
+    const existing = await this.db
+      .prepare(
+        `SELECT id
+         FROM catalogues
+         WHERE organization_id = ?
+           AND deleted_at IS NULL
+         ORDER BY id
+         LIMIT 1`,
+      )
+      .bind(tenant.organizationId)
+      .first<{ id: number }>();
+
+    if (existing) {
+      await this.db
+        .prepare(
+          `UPDATE catalogues
+           SET
+             mode = ?,
+             updated_at = ?,
+             version = version + 1
+           WHERE id = ?
+             AND organization_id = ?
+             AND status = 'draft'
+             AND deleted_at IS NULL`,
+        )
+        .bind(
+          input.mode,
+          input.updatedAt,
+          existing.id,
+          tenant.organizationId,
+        )
+        .run();
+
+      return;
+    }
+
+    await this.db
+      .prepare(
+        `INSERT INTO catalogues (
+           public_id,
+           organization_id,
+           name,
+           slug,
+           mode,
+           status,
+           created_at,
+           updated_at
+         ) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?)`,
+      )
+      .bind(
+        input.publicId,
+        tenant.organizationId,
+        input.name,
+        input.internalSlug,
+        input.mode,
+        input.updatedAt,
+        input.updatedAt,
+      )
+      .run();
   }
 
   async updateBusinessType(

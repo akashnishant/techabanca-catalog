@@ -96,6 +96,105 @@ export function createOnboardingRoutes() {
   );
 
   routes.patch(
+    "/catalogue-mode",
+    requireAuthentication,
+    requireTenantAccess,
+    async (c) => {
+      const access = c.get("tenantAccess");
+
+      let body: unknown;
+
+      try {
+        body = await c.req.json();
+      } catch {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid JSON request body is required.",
+        );
+      }
+
+      if (
+        typeof body !== "object"
+        || body === null
+        || typeof (
+          body as Record<string, unknown>
+        ).mode !== "string"
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A catalogue mode is required.",
+        );
+      }
+
+      const mode = (
+        body as Record<string, string>
+      ).mode.trim().toLowerCase();
+
+      if (
+        mode !== "products"
+        && mode !== "services"
+        && mode !== "both"
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "Catalogue mode must be products, services, or both.",
+        );
+      }
+
+      try {
+        const service = onboardingService(c.env.DB);
+        const result =
+          await service.updateCatalogueMode(
+            access.tenant,
+            access.role,
+            mode,
+            new Date(),
+          );
+
+        if (result.kind === "forbidden") {
+          return apiError(
+            c,
+            403,
+            "insufficient_permissions",
+            "Owner or admin access is required.",
+          );
+        }
+
+        if (
+          result.kind ===
+          "prerequisite_required"
+        ) {
+          return apiError(
+            c,
+            400,
+            "onboarding_prerequisite_required",
+            "Complete business identity and business type first.",
+          );
+        }
+
+        ensureApiRequestId(c);
+
+        return c.json({
+          data: result.state,
+        });
+      } catch {
+        return apiError(
+          c,
+          500,
+          "internal_error",
+          "Catalogue mode could not be updated.",
+        );
+      }
+    },
+  );
+
+  routes.patch(
     "/business-type",
     requireAuthentication,
     requireTenantAccess,
