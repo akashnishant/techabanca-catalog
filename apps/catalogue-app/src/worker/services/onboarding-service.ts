@@ -73,6 +73,21 @@ export type OnboardingContactsResult =
       kind: "prerequisite_required";
     };
 
+export type OnboardingThemeResult =
+  | {
+      kind: "updated";
+      state: OnboardingState;
+    }
+  | {
+      kind: "forbidden";
+    }
+  | {
+      kind: "unavailable";
+    }
+  | {
+      kind: "prerequisite_required";
+    };
+
 function cleanRequiredText(
   value: string,
 ): string {
@@ -175,6 +190,63 @@ export class OnboardingService {
     tenant: TenantContext,
   ): Promise<OnboardingState> {
     return this.repository.getState(tenant);
+  }
+
+  async updateTheme(
+    tenant: TenantContext,
+    role: OrganizationMemberRole,
+    themeCode: string,
+    now: Date,
+  ): Promise<OnboardingThemeResult> {
+    if (role === "editor") {
+      return {
+        kind: "forbidden",
+      };
+    }
+
+    if (Number.isNaN(now.getTime())) {
+      throw new Error("invalid_date");
+    }
+
+    const state =
+      await this.repository.getState(tenant);
+
+    if (
+      !state.progress.catalogueStarted
+      || !state.progress.contactsComplete
+      || state.catalogue === null
+    ) {
+      return {
+        kind: "prerequisite_required",
+      };
+    }
+
+    const normalizedCode =
+      themeCode.trim().toLowerCase();
+
+    const updated =
+      await this.repository.upsertTheme(
+        tenant,
+        {
+          cataloguePublicId:
+            state.catalogue.id,
+          themeCode: normalizedCode,
+          updatedAt: now.toISOString(),
+        },
+      );
+
+    if (!updated) {
+      return {
+        kind: "unavailable",
+      };
+    }
+
+    return {
+      kind: "updated",
+      state: await this.repository.getState(
+        tenant,
+      ),
+    };
   }
 
   async updateContacts(

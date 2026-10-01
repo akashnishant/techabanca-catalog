@@ -54,6 +54,9 @@ export type OnboardingState = {
     email: string | null;
   };
   catalogue: OnboardingCatalogueSummary | null;
+  website: {
+    theme: OnboardingTheme | null;
+  };
   reference: {
     businessTypes: OnboardingBusinessType[];
     themes: OnboardingTheme[];
@@ -65,6 +68,7 @@ export type OnboardingState = {
     businessTypeComplete: boolean;
     catalogueStarted: boolean;
     contactsComplete: boolean;
+    themeComplete: boolean;
   };
 };
 
@@ -129,6 +133,12 @@ type CatalogueRow = {
     | "archived";
 };
 
+type SelectedThemeRow = {
+  code: string;
+  name: string;
+  description: string | null;
+};
+
 export class OnboardingRepository {
   constructor(private readonly db: D1Database) {}
 
@@ -141,6 +151,7 @@ export class OnboardingRepository {
       themes,
       suggestedAttributes,
       catalogue,
+      selectedTheme,
     ] = await Promise.all([
       this.db
         .prepare(
@@ -229,6 +240,24 @@ export class OnboardingRepository {
         )
         .bind(tenant.organizationId)
         .first<CatalogueRow>(),
+      this.db
+        .prepare(
+          `SELECT
+             t.code,
+             t.name,
+             t.description
+           FROM catalogue_website_settings s
+           INNER JOIN catalogues c
+             ON c.id = s.catalogue_id
+           INNER JOIN theme_presets t
+             ON t.code = s.theme_code
+           WHERE c.organization_id = ?
+             AND c.deleted_at IS NULL
+           ORDER BY c.id
+           LIMIT 1`,
+        )
+        .bind(tenant.organizationId)
+        .first<SelectedThemeRow>(),
     ]);
 
     if (!identity) {
@@ -279,6 +308,16 @@ export class OnboardingRepository {
             status: catalogue.status,
           }
         : null,
+      website: {
+        theme: selectedTheme
+          ? {
+              code: selectedTheme.code,
+              name: selectedTheme.name,
+              description:
+                selectedTheme.description,
+            }
+          : null,
+      },
       reference: {
         businessTypes: businessTypes.results.map(
           (row) => ({
@@ -316,8 +355,57 @@ export class OnboardingRepository {
           identity.phone !== null
           || identity.whatsapp_number !== null
           || identity.email !== null,
+        themeComplete: selectedTheme !== null,
       },
     };
+  }
+
+  async upsertTheme(
+    tenant: TenantContext,
+    input: {
+      cataloguePublicId: string;
+      themeCode: string;
+      updatedAt: string;
+    },
+  ): Promise<boolean> {
+    const result = await this.db
+      .prepare(
+        `INSERT INTO catalogue_website_settings (
+           catalogue_id,
+           theme_code,
+           created_at,
+           updated_at
+         )
+         SELECT
+           c.id,
+           t.code,
+           ?,
+           ?
+         FROM catalogues c
+         INNER JOIN theme_presets t
+           ON t.code = ?
+          AND t.is_active = 1
+         WHERE c.organization_id = ?
+           AND c.public_id = ?
+           AND c.status = 'draft'
+           AND c.deleted_at IS NULL
+         ON CONFLICT(catalogue_id)
+         DO UPDATE SET
+           theme_code = excluded.theme_code,
+           updated_at = excluded.updated_at,
+           version =
+             catalogue_website_settings.version + 1`,
+      )
+      .bind(
+        input.updatedAt,
+        input.updatedAt,
+        input.themeCode,
+        tenant.organizationId,
+        input.cataloguePublicId,
+      )
+      .run();
+
+    return (result.meta.changes ?? 0) > 0;
   }
 
   async updateContacts(

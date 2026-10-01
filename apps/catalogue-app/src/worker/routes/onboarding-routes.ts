@@ -96,6 +96,116 @@ export function createOnboardingRoutes() {
   );
 
   routes.patch(
+    "/theme",
+    requireAuthentication,
+    requireTenantAccess,
+    async (c) => {
+      const access = c.get("tenantAccess");
+
+      let body: unknown;
+
+      try {
+        body = await c.req.json();
+      } catch {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid JSON request body is required.",
+        );
+      }
+
+      if (
+        typeof body !== "object"
+        || body === null
+        || typeof (
+          body as Record<string, unknown>
+        ).themeCode !== "string"
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A theme is required.",
+        );
+      }
+
+      const themeCode = (
+        body as Record<string, string>
+      ).themeCode.trim();
+
+      if (
+        themeCode.length < 2
+        || themeCode.length > 64
+        || !/^[A-Za-z0-9-]+$/.test(
+          themeCode,
+        )
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid theme is required.",
+        );
+      }
+
+      try {
+        const service = onboardingService(c.env.DB);
+        const result =
+          await service.updateTheme(
+            access.tenant,
+            access.role,
+            themeCode,
+            new Date(),
+          );
+
+        if (result.kind === "forbidden") {
+          return apiError(
+            c,
+            403,
+            "insufficient_permissions",
+            "Owner or admin access is required.",
+          );
+        }
+
+        if (
+          result.kind ===
+          "prerequisite_required"
+        ) {
+          return apiError(
+            c,
+            400,
+            "onboarding_prerequisite_required",
+            "Add business contact details before selecting a theme.",
+          );
+        }
+
+        if (result.kind === "unavailable") {
+          return apiError(
+            c,
+            400,
+            "theme_unavailable",
+            "The selected theme is not available.",
+          );
+        }
+
+        ensureApiRequestId(c);
+
+        return c.json({
+          data: result.state,
+        });
+      } catch {
+        return apiError(
+          c,
+          500,
+          "internal_error",
+          "Theme could not be updated.",
+        );
+      }
+    },
+  );
+
+  routes.patch(
     "/contacts",
     requireAuthentication,
     requireTenantAccess,

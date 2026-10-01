@@ -229,6 +229,22 @@ async function createDraftCatalogueForOnboarding() {
     .run();
 }
 
+async function completeThemePrerequisites() {
+  await completeOnboardingPrerequisites();
+  await createDraftCatalogueForOnboarding();
+
+  await env.DB
+    .prepare(
+      `UPDATE business_profiles
+       SET
+         email = 'sales@example.com',
+         updated_at = ?
+       WHERE organization_id = ?`,
+    )
+    .bind(NOW, ORG_ID)
+    .run();
+}
+
 async function sessionCookie(
   userId: number,
 ): Promise<string> {
@@ -388,6 +404,7 @@ describe("onboarding HTTP foundation", () => {
       businessTypeComplete: false,
       catalogueStarted: false,
       contactsComplete: false,
+      themeComplete: false,
     });
 
     expect(JSON.stringify(body)).not.toContain(
@@ -1123,6 +1140,276 @@ describe("onboarding HTTP foundation", () => {
       }>();
 
     expect(persisted?.email).toBeNull();
+  });
+
+  it("creates website settings when an owner selects an active theme", async () => {
+    await completeThemePrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/theme",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            themeCode: "  PROFESSIONAL  ",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json<{
+      data: {
+        website: {
+          theme: {
+            code: string;
+            name: string;
+          } | null;
+        };
+        progress: {
+          themeComplete: boolean;
+        };
+      };
+    }>();
+
+    expect(body.data.website.theme).toMatchObject({
+      code: "professional",
+      name: "Professional",
+    });
+    expect(
+      body.data.progress.themeComplete,
+    ).toBe(true);
+
+    const persisted = await env.DB
+      .prepare(
+        `SELECT
+           s.theme_code,
+           s.version
+         FROM catalogue_website_settings s
+         INNER JOIN catalogues c
+           ON c.id = s.catalogue_id
+         WHERE c.organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{
+        theme_code: string;
+        version: number;
+      }>();
+
+    expect(persisted).toEqual({
+      theme_code: "professional",
+      version: 1,
+    });
+  });
+
+  it("updates the existing website settings row instead of creating another", async () => {
+    await completeThemePrerequisites();
+
+    const catalogue = await env.DB
+      .prepare(
+        `SELECT id
+         FROM catalogues
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{ id: number }>();
+
+    if (!catalogue) {
+      throw new Error("catalogue_fixture_missing");
+    }
+
+    await env.DB
+      .prepare(
+        `INSERT INTO catalogue_website_settings (
+           catalogue_id,
+           theme_code,
+           created_at,
+           updated_at
+         ) VALUES (?, 'professional', ?, ?)`,
+      )
+      .bind(catalogue.id, NOW, NOW)
+      .run();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/theme",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            themeCode: "professional",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const rows = await env.DB
+      .prepare(
+        `SELECT theme_code, version
+         FROM catalogue_website_settings
+         WHERE catalogue_id = ?`,
+      )
+      .bind(catalogue.id)
+      .all<{
+        theme_code: string;
+        version: number;
+      }>();
+
+    expect(rows.results).toEqual([
+      {
+        theme_code: "professional",
+        version: 2,
+      },
+    ]);
+  });
+
+  it("requires completed contacts before theme selection", async () => {
+    await completeOnboardingPrerequisites();
+    await createDraftCatalogueForOnboarding();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/theme",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            themeCode: "professional",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "onboarding_prerequisite_required",
+    );
+
+    const count = await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM catalogue_website_settings`,
+      )
+      .first<{ count: number }>();
+
+    expect(count?.count).toBe(0);
+  });
+
+  it("rejects unavailable themes without creating website settings", async () => {
+    await completeThemePrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/theme",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            themeCode: "future-theme",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "theme_unavailable",
+    );
+
+    const count = await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM catalogue_website_settings`,
+      )
+      .first<{ count: number }>();
+
+    expect(count?.count).toBe(0);
+  });
+
+  it("prevents editors from changing the catalogue theme", async () => {
+    await completeThemePrerequisites();
+
+    const cookie = await sessionCookie(EDITOR_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/theme",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            themeCode: "professional",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(403);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "insufficient_permissions",
+    );
+
+    const count = await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM catalogue_website_settings`,
+      )
+      .first<{ count: number }>();
+
+    expect(count?.count).toBe(0);
   });
 
   it("rejects malformed identity input", async () => {
