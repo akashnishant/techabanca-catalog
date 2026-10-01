@@ -14,7 +14,7 @@ const PASSWORD = "TechabancaTestPassword!42";
 const PASSWORD_HASH =
   "pbkdf2-sha256$600000$101112131415161718191a1b1c1d1e1f$a3be905efe864c4c9d133ac6bf32f95490995ad5d15d9cff3dfc4d5eacecf3cd";
 const COOKIE_NAME =
-  "techabanca_catalogue_session";
+  "__Host-techabanca_catalogue_session";
 
 async function resetFixture() {
   await env.DB.batch([

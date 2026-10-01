@@ -13,7 +13,7 @@ import {
 } from "../src/worker/security/password-hasher";
 
 const COOKIE_NAME =
-  "techabanca_catalogue_session";
+  "__Host-techabanca_catalogue_session";
 const PASSWORD =
   "Strong registration password 42!";
 

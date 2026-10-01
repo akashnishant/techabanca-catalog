@@ -148,7 +148,7 @@ async function sessionCookie(
 
   return {
     cookie:
-      `techabanca_catalogue_session=${created.token}`,
+      `__Host-techabanca_catalogue_session=${created.token}`,
     sessionPublicId: created.sessionPublicId,
   };
 }
