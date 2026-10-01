@@ -5,6 +5,7 @@ export * from "./catalogue-item-repository";
 export * from "./catalogue-slug-repository";
 export * from "./enquiry-repository";
 export * from "./moderation-case-repository";
+export * from "./onboarding-repository";
 export * from "./published-catalogue-repository";
 export * from "./registration-repository";
 export * from "./session-repository";
