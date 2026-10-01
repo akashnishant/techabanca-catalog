@@ -204,6 +204,31 @@ async function completeOnboardingPrerequisites() {
   ]);
 }
 
+async function createDraftCatalogueForOnboarding() {
+  await env.DB
+    .prepare(
+      `INSERT INTO catalogues (
+         public_id,
+         organization_id,
+         name,
+         slug,
+         mode,
+         status,
+         created_at,
+         updated_at
+       ) VALUES (?, ?, ?, ?, 'products', 'draft', ?, ?)`,
+    )
+    .bind(
+      "cat_33333333333333333333333333333333",
+      ORG_ID,
+      "Starter Business",
+      "draft-33333333333333333333333333333333",
+      NOW,
+      NOW,
+    )
+    .run();
+}
+
 async function sessionCookie(
   userId: number,
 ): Promise<string> {
@@ -362,6 +387,7 @@ describe("onboarding HTTP foundation", () => {
       identityComplete: false,
       businessTypeComplete: false,
       catalogueStarted: false,
+      contactsComplete: false,
     });
 
     expect(JSON.stringify(body)).not.toContain(
@@ -817,6 +843,286 @@ describe("onboarding HTTP foundation", () => {
       .first<{ count: number }>();
 
     expect(count?.count).toBe(0);
+  });
+
+  it("allows an owner to save normalized business contact details", async () => {
+    await completeOnboardingPrerequisites();
+    await createDraftCatalogueForOnboarding();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/contacts",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phone: " +91 22 5555 1234 ",
+            whatsappNumber:
+              " +91 (98765) 43210 ",
+            email: " Sales@Example.COM ",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json<{
+      data: {
+        profile: {
+          phone: string | null;
+          whatsappNumber: string | null;
+          email: string | null;
+        };
+        progress: {
+          contactsComplete: boolean;
+        };
+      };
+    }>();
+
+    expect(body.data.profile).toMatchObject({
+      phone: "+91 22 5555 1234",
+      whatsappNumber: "+919876543210",
+      email: "sales@example.com",
+    });
+    expect(
+      body.data.progress.contactsComplete,
+    ).toBe(true);
+
+    const persisted = await env.DB
+      .prepare(
+        `SELECT
+           phone,
+           whatsapp_number,
+           email
+         FROM business_profiles
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{
+        phone: string | null;
+        whatsapp_number: string | null;
+        email: string | null;
+      }>();
+
+    expect(persisted).toMatchObject({
+      phone: "+91 22 5555 1234",
+      whatsapp_number: "+919876543210",
+      email: "sales@example.com",
+    });
+  });
+
+  it("supports partial contact updates without erasing existing details", async () => {
+    await completeOnboardingPrerequisites();
+    await createDraftCatalogueForOnboarding();
+
+    await env.DB
+      .prepare(
+        `UPDATE business_profiles
+         SET
+           phone = '+91 22 4000 5000',
+           whatsapp_number = '+919999999999',
+           email = 'old@example.com'
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .run();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/contacts",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "new@example.com",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json<{
+      data: {
+        profile: {
+          phone: string | null;
+          whatsappNumber: string | null;
+          email: string | null;
+        };
+      };
+    }>();
+
+    expect(body.data.profile).toEqual({
+      businessName: "Starter Business",
+      city: "Mumbai",
+      phone: "+91 22 4000 5000",
+      whatsappNumber: "+919999999999",
+      email: "new@example.com",
+    });
+  });
+
+  it("requires a started catalogue before contact details", async () => {
+    await completeOnboardingPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/contacts",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "sales@example.com",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "onboarding_prerequisite_required",
+    );
+  });
+
+  it("rejects invalid or empty contact details", async () => {
+    await completeOnboardingPrerequisites();
+    await createDraftCatalogueForOnboarding();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const invalidEmail = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/contacts",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "not-an-email",
+          }),
+        },
+      ),
+    );
+
+    expect(invalidEmail.status).toBe(400);
+
+    const invalidBody = await invalidEmail.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(invalidBody.error.code).toBe(
+      "invalid_contact_details",
+    );
+
+    const emptySet = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/contacts",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phone: null,
+            whatsappNumber: null,
+            email: null,
+          }),
+        },
+      ),
+    );
+
+    expect(emptySet.status).toBe(400);
+
+    const emptyBody = await emptySet.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(emptyBody.error.code).toBe(
+      "invalid_contact_details",
+    );
+  });
+
+  it("prevents editors from changing business contact details", async () => {
+    await completeOnboardingPrerequisites();
+    await createDraftCatalogueForOnboarding();
+
+    const cookie = await sessionCookie(EDITOR_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/contacts",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: "editor@example.com",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(403);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "insufficient_permissions",
+    );
+
+    const persisted = await env.DB
+      .prepare(
+        `SELECT email
+         FROM business_profiles
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{
+        email: string | null;
+      }>();
+
+    expect(persisted?.email).toBeNull();
   });
 
   it("rejects malformed identity input", async () => {

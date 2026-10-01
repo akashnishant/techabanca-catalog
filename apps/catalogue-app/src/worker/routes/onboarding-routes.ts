@@ -96,6 +96,158 @@ export function createOnboardingRoutes() {
   );
 
   routes.patch(
+    "/contacts",
+    requireAuthentication,
+    requireTenantAccess,
+    async (c) => {
+      const access = c.get("tenantAccess");
+
+      let body: unknown;
+
+      try {
+        body = await c.req.json();
+      } catch {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid JSON request body is required.",
+        );
+      }
+
+      if (
+        typeof body !== "object"
+        || body === null
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "Contact details are required.",
+        );
+      }
+
+      const record =
+        body as Record<string, unknown>;
+
+      const allowedKeys = [
+        "phone",
+        "whatsappNumber",
+        "email",
+      ] as const;
+
+      const providedKeys =
+        allowedKeys.filter((key) =>
+          Object.prototype.hasOwnProperty.call(
+            record,
+            key,
+          ),
+        );
+
+      if (providedKeys.length === 0) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "Provide at least one contact field.",
+        );
+      }
+
+      for (const key of providedKeys) {
+        const value = record[key];
+
+        if (
+          value !== null
+          && typeof value !== "string"
+        ) {
+          return apiError(
+            c,
+            400,
+            "invalid_request",
+            "Contact fields must be text or null.",
+          );
+        }
+      }
+
+      try {
+        const service = onboardingService(c.env.DB);
+        const result =
+          await service.updateContacts(
+            access.tenant,
+            access.role,
+            {
+              phone:
+                Object.prototype.hasOwnProperty.call(
+                  record,
+                  "phone",
+                )
+                  ? (record.phone as string | null)
+                  : undefined,
+              whatsappNumber:
+                Object.prototype.hasOwnProperty.call(
+                  record,
+                  "whatsappNumber",
+                )
+                  ? (record.whatsappNumber as string | null)
+                  : undefined,
+              email:
+                Object.prototype.hasOwnProperty.call(
+                  record,
+                  "email",
+                )
+                  ? (record.email as string | null)
+                  : undefined,
+            },
+            new Date(),
+          );
+
+        if (result.kind === "forbidden") {
+          return apiError(
+            c,
+            403,
+            "insufficient_permissions",
+            "Owner or admin access is required.",
+          );
+        }
+
+        if (
+          result.kind ===
+          "prerequisite_required"
+        ) {
+          return apiError(
+            c,
+            400,
+            "onboarding_prerequisite_required",
+            "Start the catalogue before adding contact details.",
+          );
+        }
+
+        if (result.kind === "invalid") {
+          return apiError(
+            c,
+            400,
+            "invalid_contact_details",
+            "Provide at least one valid phone, WhatsApp number, or email address.",
+          );
+        }
+
+        ensureApiRequestId(c);
+
+        return c.json({
+          data: result.state,
+        });
+      } catch {
+        return apiError(
+          c,
+          500,
+          "internal_error",
+          "Contact details could not be updated.",
+        );
+      }
+    },
+  );
+
+  routes.patch(
     "/catalogue-mode",
     requireAuthentication,
     requireTenantAccess,

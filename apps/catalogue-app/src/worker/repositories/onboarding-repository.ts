@@ -64,6 +64,7 @@ export type OnboardingState = {
     identityComplete: boolean;
     businessTypeComplete: boolean;
     catalogueStarted: boolean;
+    contactsComplete: boolean;
   };
 };
 
@@ -71,6 +72,13 @@ export type UpdateOnboardingIdentityInput = {
   businessName: string;
   countryCode: string;
   city: string;
+  updatedAt: string;
+};
+
+export type UpdateOnboardingContactsInput = {
+  phone: string | null;
+  whatsappNumber: string | null;
+  email: string | null;
   updatedAt: string;
 };
 
@@ -304,8 +312,38 @@ export class OnboardingRepository {
           && normalizedCity !== null,
         businessTypeComplete: businessType !== null,
         catalogueStarted: catalogue !== null,
+        contactsComplete:
+          identity.phone !== null
+          || identity.whatsapp_number !== null
+          || identity.email !== null,
       },
     };
+  }
+
+  async updateContacts(
+    tenant: TenantContext,
+    input: UpdateOnboardingContactsInput,
+  ): Promise<boolean> {
+    const result = await this.db
+      .prepare(
+        `UPDATE business_profiles
+         SET
+           phone = ?,
+           whatsapp_number = ?,
+           email = ?,
+           updated_at = ?
+         WHERE organization_id = ?`,
+      )
+      .bind(
+        input.phone,
+        input.whatsappNumber,
+        input.email,
+        input.updatedAt,
+        tenant.organizationId,
+      )
+      .run();
+
+    return (result.meta.changes ?? 0) > 0;
   }
 
   async upsertCatalogueMode(
