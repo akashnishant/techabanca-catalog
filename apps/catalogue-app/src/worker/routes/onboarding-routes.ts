@@ -99,6 +99,146 @@ export function createOnboardingRoutes() {
     },
   );
 
+  routes.post(
+    "/first-item",
+    requireAuthentication,
+    requireTenantAccess,
+    async (c) => {
+      const access = c.get("tenantAccess");
+
+      let body: unknown;
+
+      try {
+        body = await c.req.json();
+      } catch {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid JSON request body is required.",
+        );
+      }
+
+      if (
+        typeof body !== "object"
+        || body === null
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "First item details are required.",
+        );
+      }
+
+      const record =
+        body as Record<string, unknown>;
+
+      if (
+        typeof record.name !== "string"
+        || (
+          record.itemType !== undefined
+          && record.itemType !== "product"
+          && record.itemType !== "service"
+        )
+        || (
+          record.shortDescription !== undefined
+          && record.shortDescription !== null
+          && typeof record.shortDescription
+            !== "string"
+        )
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "Provide a valid item name, item type, and optional description.",
+        );
+      }
+
+      try {
+        const service = onboardingService(c.env.DB);
+        const result =
+          await service.createFirstItem(
+            access.tenant,
+            access.role,
+            {
+              name: record.name,
+              itemType:
+                record.itemType as
+                  | "product"
+                  | "service"
+                  | undefined,
+              shortDescription:
+                record.shortDescription as
+                  | string
+                  | null
+                  | undefined,
+            },
+            new Date(),
+          );
+
+        if (result.kind === "forbidden") {
+          return apiError(
+            c,
+            403,
+            "insufficient_permissions",
+            "Owner or admin access is required.",
+          );
+        }
+
+        if (
+          result.kind ===
+          "prerequisite_required"
+        ) {
+          return apiError(
+            c,
+            400,
+            "onboarding_prerequisite_required",
+            "Select a catalogue theme before adding the first item.",
+          );
+        }
+
+        if (result.kind === "invalid") {
+          return apiError(
+            c,
+            400,
+            "invalid_first_item",
+            "Provide a valid first catalogue item for the selected catalogue mode.",
+          );
+        }
+
+        if (
+          result.kind ===
+          "already_complete"
+        ) {
+          return apiError(
+            c,
+            400,
+            "onboarding_step_complete",
+            "A first catalogue item already exists.",
+          );
+        }
+
+        ensureApiRequestId(c);
+
+        return c.json(
+          {
+            data: result.state,
+          },
+          201,
+        );
+      } catch {
+        return apiError(
+          c,
+          500,
+          "internal_error",
+          "The first catalogue item could not be created.",
+        );
+      }
+    },
+  );
+
   routes.get(
     "/slug-availability",
     requireAuthentication,

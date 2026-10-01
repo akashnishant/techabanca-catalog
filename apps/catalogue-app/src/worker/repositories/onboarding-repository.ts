@@ -57,6 +57,14 @@ export type OnboardingState = {
   website: {
     theme: OnboardingTheme | null;
   };
+  firstItem: {
+    id: string;
+    itemType: "product" | "service";
+    name: string;
+    slug: string;
+    shortDescription: string | null;
+    status: "draft" | "published" | "hidden";
+  } | null;
   reference: {
     businessTypes: OnboardingBusinessType[];
     themes: OnboardingTheme[];
@@ -70,6 +78,7 @@ export type OnboardingState = {
     contactsComplete: boolean;
     themeComplete: boolean;
     slugComplete: boolean;
+    firstItemComplete: boolean;
   };
 };
 
@@ -140,6 +149,15 @@ type SelectedThemeRow = {
   description: string | null;
 };
 
+type FirstItemRow = {
+  public_id: string;
+  item_type: "product" | "service";
+  name: string;
+  slug: string;
+  short_description: string | null;
+  status: "draft" | "published" | "hidden";
+};
+
 export class OnboardingRepository {
   constructor(private readonly db: D1Database) {}
 
@@ -153,6 +171,7 @@ export class OnboardingRepository {
       suggestedAttributes,
       catalogue,
       selectedTheme,
+      firstItem,
     ] = await Promise.all([
       this.db
         .prepare(
@@ -259,6 +278,26 @@ export class OnboardingRepository {
         )
         .bind(tenant.organizationId)
         .first<SelectedThemeRow>(),
+      this.db
+        .prepare(
+          `SELECT
+             i.public_id,
+             i.item_type,
+             i.name,
+             i.slug,
+             i.short_description,
+             i.status
+           FROM catalogue_items i
+           INNER JOIN catalogues c
+             ON c.id = i.catalogue_id
+           WHERE c.organization_id = ?
+             AND c.deleted_at IS NULL
+             AND i.deleted_at IS NULL
+           ORDER BY i.id
+           LIMIT 1`,
+        )
+        .bind(tenant.organizationId)
+        .first<FirstItemRow>(),
     ]);
 
     if (!identity) {
@@ -322,6 +361,17 @@ export class OnboardingRepository {
             }
           : null,
       },
+      firstItem: firstItem
+        ? {
+            id: firstItem.public_id,
+            itemType: firstItem.item_type,
+            name: firstItem.name,
+            slug: firstItem.slug,
+            shortDescription:
+              firstItem.short_description,
+            status: firstItem.status,
+          }
+        : null,
       reference: {
         businessTypes: businessTypes.results.map(
           (row) => ({
@@ -364,8 +414,72 @@ export class OnboardingRepository {
           catalogue !== null
           && catalogue.slug
             !== `draft-${catalogue.public_id.slice(4).toLowerCase()}`,
+        firstItemComplete: firstItem !== null,
       },
     };
+  }
+
+  async createFirstItem(
+    tenant: TenantContext,
+    input: {
+      publicId: string;
+      cataloguePublicId: string;
+      itemType: "product" | "service";
+      name: string;
+      slug: string;
+      shortDescription: string | null;
+      updatedAt: string;
+    },
+  ): Promise<boolean> {
+    const result = await this.db
+      .prepare(
+        `INSERT INTO catalogue_items (
+           public_id,
+           catalogue_id,
+           item_type,
+           name,
+           slug,
+           short_description,
+           status,
+           created_at,
+           updated_at
+         )
+         SELECT
+           ?,
+           c.id,
+           ?,
+           ?,
+           ?,
+           ?,
+           'draft',
+           ?,
+           ?
+         FROM catalogues c
+         WHERE c.organization_id = ?
+           AND c.public_id = ?
+           AND c.status = 'draft'
+           AND c.deleted_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1
+             FROM catalogue_items existing
+             WHERE existing.catalogue_id = c.id
+               AND existing.deleted_at IS NULL
+           )`,
+      )
+      .bind(
+        input.publicId,
+        input.itemType,
+        input.name,
+        input.slug,
+        input.shortDescription,
+        input.updatedAt,
+        input.updatedAt,
+        tenant.organizationId,
+        input.cataloguePublicId,
+      )
+      .run();
+
+    return (result.meta.changes ?? 0) > 0;
   }
 
   async claimCatalogueSlug(

@@ -443,6 +443,7 @@ describe("onboarding HTTP foundation", () => {
       contactsComplete: false,
       themeComplete: false,
       slugComplete: false,
+      firstItemComplete: false,
     });
 
     expect(JSON.stringify(body)).not.toContain(
@@ -1784,6 +1785,352 @@ describe("onboarding HTTP foundation", () => {
     expect(unchanged?.slug).toMatch(
       /^draft-[a-f0-9]{32}$/,
     );
+  });
+
+  it("creates a minimal draft product as the first onboarding item", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "  Heavy Duty Pump  ",
+            shortDescription:
+              "  Reliable industrial pump  ",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+
+    const body = await response.json<{
+      data: {
+        firstItem: {
+          id: string;
+          itemType: string;
+          name: string;
+          slug: string;
+          shortDescription: string | null;
+          status: string;
+        } | null;
+        progress: {
+          firstItemComplete: boolean;
+        };
+      };
+    }>();
+
+    expect(body.data.firstItem).toMatchObject({
+      itemType: "product",
+      name: "Heavy Duty Pump",
+      slug: "heavy-duty-pump",
+      shortDescription:
+        "Reliable industrial pump",
+      status: "draft",
+    });
+
+    expect(
+      body.data.firstItem?.id,
+    ).toMatch(/^itm_[0-9a-f]{32}$/);
+
+    expect(
+      body.data.progress.firstItemComplete,
+    ).toBe(true);
+  });
+
+  it("derives a service first item from a services-only catalogue", async () => {
+    await completeSlugPrerequisites();
+
+    await env.DB
+      .prepare(
+        `UPDATE catalogues
+         SET mode = 'services'
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .run();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Annual Maintenance",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(201);
+
+    const persisted = await env.DB
+      .prepare(
+        `SELECT
+           i.item_type AS item_type,
+           i.name AS name,
+           i.status AS status
+         FROM catalogue_items i
+         INNER JOIN catalogues c
+           ON c.id = i.catalogue_id
+         WHERE c.organization_id = ?
+           AND i.deleted_at IS NULL`,
+      )
+      .bind(ORG_ID)
+      .first<{
+        item_type: string;
+        name: string;
+        status: string;
+      }>();
+
+    expect(persisted).toEqual({
+      item_type: "service",
+      name: "Annual Maintenance",
+      status: "draft",
+    });
+  });
+
+  it("requires an explicit item type when the catalogue supports both", async () => {
+    await completeSlugPrerequisites();
+
+    await env.DB
+      .prepare(
+        `UPDATE catalogues
+         SET mode = 'both'
+         WHERE organization_id = ?`,
+      )
+      .bind(ORG_ID)
+      .run();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Installation",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "invalid_first_item",
+    );
+  });
+
+  it("rejects an item type that conflicts with the catalogue mode", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Installation",
+            itemType: "service",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "invalid_first_item",
+    );
+  });
+
+  it("does not create a second onboarding first item", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const first = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "First Pump",
+          }),
+        },
+      ),
+    );
+
+    expect(first.status).toBe(201);
+
+    const second = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Second Pump",
+          }),
+        },
+      ),
+    );
+
+    expect(second.status).toBe(400);
+
+    const body = await second.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "onboarding_step_complete",
+    );
+
+    const count = await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM catalogue_items i
+         INNER JOIN catalogues c
+           ON c.id = i.catalogue_id
+         WHERE c.organization_id = ?
+           AND i.deleted_at IS NULL`,
+      )
+      .bind(ORG_ID)
+      .first<{ count: number }>();
+
+    expect(count?.count).toBe(1);
+  });
+
+  it("requires a selected theme before creating the first item", async () => {
+    await completeThemePrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Needs Theme",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "onboarding_prerequisite_required",
+    );
+  });
+
+  it("prevents editors from creating the first onboarding item", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(EDITOR_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Editor Item",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(403);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "insufficient_permissions",
+    );
+
+    const count = await env.DB
+      .prepare(
+        `SELECT COUNT(*) AS count
+         FROM catalogue_items`,
+      )
+      .first<{ count: number }>();
+
+    expect(count?.count).toBe(0);
   });
 
   it("rejects malformed identity input", async () => {

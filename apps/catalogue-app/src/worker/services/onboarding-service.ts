@@ -1,5 +1,6 @@
 import {
   createPublicId,
+  normalizeItemSlug,
   type OrganizationMemberRole,
   type TenantContext,
 } from "@techabanca/domain";
@@ -85,6 +86,30 @@ export type OnboardingThemeResult =
     }
   | {
       kind: "unavailable";
+    }
+  | {
+      kind: "prerequisite_required";
+    };
+
+export type OnboardingFirstItemInput = {
+  name: string;
+  itemType?: "product" | "service";
+  shortDescription?: string | null;
+};
+
+export type OnboardingFirstItemResult =
+  | {
+      kind: "updated";
+      state: OnboardingState;
+    }
+  | {
+      kind: "forbidden";
+    }
+  | {
+      kind: "invalid";
+    }
+  | {
+      kind: "already_complete";
     }
   | {
       kind: "prerequisite_required";
@@ -218,6 +243,160 @@ export class OnboardingService {
     tenant: TenantContext,
   ): Promise<OnboardingState> {
     return this.repository.getState(tenant);
+  }
+
+  async createFirstItem(
+    tenant: TenantContext,
+    role: OrganizationMemberRole,
+    input: OnboardingFirstItemInput,
+    now: Date,
+  ): Promise<OnboardingFirstItemResult> {
+    if (role === "editor") {
+      return {
+        kind: "forbidden",
+      };
+    }
+
+    if (Number.isNaN(now.getTime())) {
+      throw new Error("invalid_date");
+    }
+
+    const state =
+      await this.repository.getState(tenant);
+
+    if (
+      !state.progress.themeComplete
+      || state.catalogue === null
+    ) {
+      return {
+        kind: "prerequisite_required",
+      };
+    }
+
+    if (state.progress.firstItemComplete) {
+      return {
+        kind: "already_complete",
+      };
+    }
+
+    const name =
+      cleanRequiredText(input.name);
+
+    if (
+      name.length < 1
+      || name.length > 180
+    ) {
+      return {
+        kind: "invalid",
+      };
+    }
+
+    const shortDescription =
+      input.shortDescription === undefined
+      || input.shortDescription === null
+        ? null
+        : input.shortDescription
+            .trim()
+            .replace(/\s+/g, " ");
+
+    if (
+      shortDescription !== null
+      && shortDescription.length > 500
+    ) {
+      return {
+        kind: "invalid",
+      };
+    }
+
+    let itemType: "product" | "service";
+
+    if (state.catalogue.mode === "products") {
+      if (
+        input.itemType !== undefined
+        && input.itemType !== "product"
+      ) {
+        return {
+          kind: "invalid",
+        };
+      }
+
+      itemType = "product";
+    } else if (
+      state.catalogue.mode === "services"
+    ) {
+      if (
+        input.itemType !== undefined
+        && input.itemType !== "service"
+      ) {
+        return {
+          kind: "invalid",
+        };
+      }
+
+      itemType = "service";
+    } else {
+      if (
+        input.itemType !== "product"
+        && input.itemType !== "service"
+      ) {
+        return {
+          kind: "invalid",
+        };
+      }
+
+      itemType = input.itemType;
+    }
+
+    const publicId = createPublicId("itm");
+    const normalizedSlug =
+      normalizeItemSlug(name);
+
+    const slug =
+      normalizedSlug.length > 0
+        ? normalizedSlug
+        : `item-${publicId.slice(4, 12)}`;
+
+    const created =
+      await this.repository.createFirstItem(
+        tenant,
+        {
+          publicId,
+          cataloguePublicId:
+            state.catalogue.id,
+          itemType,
+          name,
+          slug,
+          shortDescription:
+            shortDescription?.length
+              ? shortDescription
+              : null,
+          updatedAt: now.toISOString(),
+        },
+      );
+
+    if (!created) {
+      const refreshed =
+        await this.repository.getState(tenant);
+
+      if (
+        refreshed.progress.firstItemComplete
+      ) {
+        return {
+          kind: "already_complete",
+        };
+      }
+
+      throw new Error(
+        "first_item_create_failed",
+      );
+    }
+
+    return {
+      kind: "updated",
+      state: await this.repository.getState(
+        tenant,
+      ),
+    };
   }
 
   async slugAvailability(
