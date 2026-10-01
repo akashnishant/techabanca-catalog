@@ -79,6 +79,7 @@ export type OnboardingState = {
     themeComplete: boolean;
     slugComplete: boolean;
     firstItemComplete: boolean;
+    readyToPublish: boolean;
   };
 };
 
@@ -415,6 +416,22 @@ export class OnboardingRepository {
           && catalogue.slug
             !== `draft-${catalogue.public_id.slice(4).toLowerCase()}`,
         firstItemComplete: firstItem !== null,
+        readyToPublish:
+          identity.legal_or_display_name.trim().length > 0
+          && normalizedCountry !== null
+          && normalizedCity !== null
+          && businessType !== null
+          && catalogue !== null
+          && catalogue.status === "draft"
+          && (
+            identity.phone !== null
+            || identity.whatsapp_number !== null
+            || identity.email !== null
+          )
+          && selectedTheme !== null
+          && catalogue.slug
+            !== `draft-${catalogue.public_id.slice(4).toLowerCase()}`
+          && firstItem !== null,
       },
     };
   }

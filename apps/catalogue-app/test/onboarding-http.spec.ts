@@ -444,6 +444,7 @@ describe("onboarding HTTP foundation", () => {
       themeComplete: false,
       slugComplete: false,
       firstItemComplete: false,
+      readyToPublish: false,
     });
 
     expect(JSON.stringify(body)).not.toContain(
@@ -2131,6 +2132,124 @@ describe("onboarding HTTP foundation", () => {
       .first<{ count: number }>();
 
     expect(count?.count).toBe(0);
+  });
+
+  it("reports ready to publish only after every required onboarding step is complete", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const before = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/state",
+        {
+          headers: tenantHeaders(cookie),
+        },
+      ),
+    );
+
+    expect(before.status).toBe(200);
+
+    const beforeBody = await before.json<{
+      data: {
+        progress: {
+          readyToPublish: boolean;
+          slugComplete: boolean;
+          firstItemComplete: boolean;
+        };
+      };
+    }>();
+
+    expect(beforeBody.data.progress).toMatchObject({
+      readyToPublish: false,
+      slugComplete: false,
+      firstItemComplete: false,
+    });
+
+    const itemResponse = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/first-item",
+        {
+          method: "POST",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: "Launch Ready Pump",
+          }),
+        },
+      ),
+    );
+
+    expect(itemResponse.status).toBe(201);
+
+    const afterItem = await itemResponse.json<{
+      data: {
+        progress: {
+          readyToPublish: boolean;
+          firstItemComplete: boolean;
+        };
+      };
+    }>();
+
+    expect(afterItem.data.progress).toMatchObject({
+      readyToPublish: false,
+      firstItemComplete: true,
+    });
+
+    const slugResponse = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            slug: "launch-ready-business",
+          }),
+        },
+      ),
+    );
+
+    expect(slugResponse.status).toBe(200);
+
+    const readyBody = await slugResponse.json<{
+      data: {
+        catalogue: {
+          slug: string | null;
+        } | null;
+        progress: {
+          identityComplete: boolean;
+          businessTypeComplete: boolean;
+          catalogueStarted: boolean;
+          contactsComplete: boolean;
+          themeComplete: boolean;
+          slugComplete: boolean;
+          firstItemComplete: boolean;
+          readyToPublish: boolean;
+        };
+      };
+    }>();
+
+    expect(readyBody.data.catalogue?.slug).toBe(
+      "launch-ready-business",
+    );
+
+    expect(readyBody.data.progress).toEqual({
+      identityComplete: true,
+      businessTypeComplete: true,
+      catalogueStarted: true,
+      contactsComplete: true,
+      themeComplete: true,
+      slugComplete: true,
+      firstItemComplete: true,
+      readyToPublish: true,
+    });
   });
 
   it("rejects malformed identity input", async () => {
