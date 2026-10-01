@@ -286,6 +286,9 @@ describe("onboarding HTTP foundation", () => {
           themes: Array<{
             code: string;
           }>;
+          suggestedAttributes: Array<{
+            code: string;
+          }>;
         };
         progress: {
           identityComplete: boolean;
@@ -322,6 +325,9 @@ describe("onboarding HTTP foundation", () => {
         (theme) => theme.code,
       ),
     ).toEqual(["professional"]);
+    expect(
+      body.data.reference.suggestedAttributes,
+    ).toEqual([]);
     expect(body.data.progress).toEqual({
       identityComplete: false,
       businessTypeComplete: false,
@@ -331,6 +337,202 @@ describe("onboarding HTTP foundation", () => {
     expect(JSON.stringify(body)).not.toContain(
       `"organizationId":${ORG_ID}`,
     );
+  });
+
+  it("allows an owner to select an active business type and returns its suggested fields", async () => {
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/business-type",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            businessTypeCode: "  MANUFACTURER  ",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json<{
+      data: {
+        organization: {
+          businessType: {
+            code: string;
+            name: string;
+          } | null;
+        };
+        reference: {
+          suggestedAttributes: Array<{
+            code: string;
+            label: string;
+          }>;
+        };
+        progress: {
+          businessTypeComplete: boolean;
+        };
+      };
+    }>();
+
+    expect(
+      body.data.organization.businessType,
+    ).toMatchObject({
+      code: "manufacturer",
+      name: "Manufacturer",
+    });
+    expect(
+      body.data.progress.businessTypeComplete,
+    ).toBe(true);
+    expect(
+      body.data.reference.suggestedAttributes.length,
+    ).toBeGreaterThan(0);
+
+    const persisted = await env.DB
+      .prepare(
+        `SELECT bt.code
+         FROM organizations o
+         INNER JOIN business_types bt
+           ON bt.id = o.business_type_id
+         WHERE o.id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{ code: string }>();
+
+    expect(persisted?.code).toBe("manufacturer");
+  });
+
+  it("rejects unavailable business types without changing the organization", async () => {
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/business-type",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            businessTypeCode: "not-a-real-type",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "business_type_unavailable",
+    );
+
+    const organization = await env.DB
+      .prepare(
+        `SELECT business_type_id
+         FROM organizations
+         WHERE id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{
+        business_type_id: number | null;
+      }>();
+
+    expect(
+      organization?.business_type_id,
+    ).toBeNull();
+  });
+
+  it("rejects malformed business-type requests", async () => {
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/business-type",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            businessTypeCode: "***",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe("invalid_request");
+  });
+
+  it("prevents editors from changing the business type", async () => {
+    const cookie = await sessionCookie(EDITOR_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/business-type",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            businessTypeCode: "retailer",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(403);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "insufficient_permissions",
+    );
+
+    const organization = await env.DB
+      .prepare(
+        `SELECT business_type_id
+         FROM organizations
+         WHERE id = ?`,
+      )
+      .bind(ORG_ID)
+      .first<{
+        business_type_id: number | null;
+      }>();
+
+    expect(
+      organization?.business_type_id,
+    ).toBeNull();
   });
 
   it("rejects malformed identity input", async () => {

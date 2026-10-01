@@ -12,6 +12,16 @@ export type OnboardingTheme = {
   description: string | null;
 };
 
+export type OnboardingBusinessTypeAttribute = {
+  code: string;
+  label: string;
+  dataType: string;
+  appliesTo: string;
+  unitHint: string | null;
+  sortOrder: number;
+  required: boolean;
+};
+
 export type OnboardingCatalogueSummary = {
   id: string;
   name: string;
@@ -46,6 +56,8 @@ export type OnboardingState = {
   reference: {
     businessTypes: OnboardingBusinessType[];
     themes: OnboardingTheme[];
+    suggestedAttributes:
+      OnboardingBusinessTypeAttribute[];
   };
   progress: {
     identityComplete: boolean;
@@ -86,6 +98,16 @@ type ThemeRow = {
   description: string | null;
 };
 
+type BusinessTypeAttributeRow = {
+  code: string;
+  label: string;
+  data_type: string;
+  applies_to: string;
+  unit_hint: string | null;
+  sort_order: number;
+  is_required: number;
+};
+
 type CatalogueRow = {
   public_id: string;
   name: string;
@@ -108,6 +130,7 @@ export class OnboardingRepository {
       identity,
       businessTypes,
       themes,
+      suggestedAttributes,
       catalogue,
     ] = await Promise.all([
       this.db
@@ -157,6 +180,30 @@ export class OnboardingRepository {
            ORDER BY sort_order, code`,
         )
         .all<ThemeRow>(),
+      this.db
+        .prepare(
+          `SELECT
+             ad.code,
+             ad.label,
+             ad.data_type,
+             ad.applies_to,
+             ad.unit_hint,
+             bta.sort_order,
+             bta.is_required
+           FROM organizations o
+           INNER JOIN business_type_attributes bta
+             ON bta.business_type_id =
+                o.business_type_id
+           INNER JOIN attribute_definitions ad
+             ON ad.id =
+                bta.attribute_definition_id
+           WHERE o.id = ?
+           ORDER BY
+             bta.sort_order,
+             bta.attribute_definition_id`,
+        )
+        .bind(tenant.organizationId)
+        .all<BusinessTypeAttributeRow>(),
       this.db
         .prepare(
           `SELECT
@@ -232,6 +279,18 @@ export class OnboardingRepository {
           name: row.name,
           description: row.description,
         })),
+        suggestedAttributes:
+          suggestedAttributes.results.map(
+            (row) => ({
+              code: row.code,
+              label: row.label,
+              dataType: row.data_type,
+              appliesTo: row.applies_to,
+              unitHint: row.unit_hint,
+              sortOrder: row.sort_order,
+              required: row.is_required === 1,
+            }),
+          ),
       },
       progress: {
         identityComplete:
@@ -242,6 +301,44 @@ export class OnboardingRepository {
         catalogueStarted: catalogue !== null,
       },
     };
+  }
+
+  async updateBusinessType(
+    tenant: TenantContext,
+    businessTypeCode: string,
+    updatedAt: string,
+  ): Promise<boolean> {
+    const result = await this.db
+      .prepare(
+        `UPDATE organizations
+         SET
+           business_type_id = (
+             SELECT id
+             FROM business_types
+             WHERE code = ?
+               AND is_active = 1
+             LIMIT 1
+           ),
+           updated_at = ?
+         WHERE id = ?
+           AND status = 'active'
+           AND deleted_at IS NULL
+           AND EXISTS (
+             SELECT 1
+             FROM business_types
+             WHERE code = ?
+               AND is_active = 1
+           )`,
+      )
+      .bind(
+        businessTypeCode,
+        updatedAt,
+        tenant.organizationId,
+        businessTypeCode,
+      )
+      .run();
+
+    return (result.meta.changes ?? 0) > 0;
   }
 
   async updateIdentity(

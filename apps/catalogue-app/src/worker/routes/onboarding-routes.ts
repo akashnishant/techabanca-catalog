@@ -96,6 +96,104 @@ export function createOnboardingRoutes() {
   );
 
   routes.patch(
+    "/business-type",
+    requireAuthentication,
+    requireTenantAccess,
+    async (c) => {
+      const access = c.get("tenantAccess");
+
+      let body: unknown;
+
+      try {
+        body = await c.req.json();
+      } catch {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid JSON request body is required.",
+        );
+      }
+
+      if (
+        typeof body !== "object"
+        || body === null
+        || typeof (
+          body as Record<string, unknown>
+        ).businessTypeCode !== "string"
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A business type is required.",
+        );
+      }
+
+      const businessTypeCode = (
+        body as Record<string, string>
+      ).businessTypeCode.trim();
+
+      if (
+        businessTypeCode.length < 2
+        || businessTypeCode.length > 64
+        || !/^[A-Za-z0-9-]+$/.test(
+          businessTypeCode,
+        )
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid business type is required.",
+        );
+      }
+
+      try {
+        const service = onboardingService(c.env.DB);
+        const result =
+          await service.updateBusinessType(
+            access.tenant,
+            access.role,
+            businessTypeCode,
+            new Date(),
+          );
+
+        if (result.kind === "forbidden") {
+          return apiError(
+            c,
+            403,
+            "insufficient_permissions",
+            "Owner or admin access is required.",
+          );
+        }
+
+        if (result.kind === "unavailable") {
+          return apiError(
+            c,
+            400,
+            "business_type_unavailable",
+            "The selected business type is not available.",
+          );
+        }
+
+        ensureApiRequestId(c);
+
+        return c.json({
+          data: result.state,
+        });
+      } catch {
+        return apiError(
+          c,
+          500,
+          "internal_error",
+          "Business type could not be updated.",
+        );
+      }
+    },
+  );
+
+  routes.patch(
     "/identity",
     requireAuthentication,
     requireTenantAccess,

@@ -22,6 +22,18 @@ export type OnboardingIdentityResult =
       kind: "forbidden";
     };
 
+export type OnboardingBusinessTypeResult =
+  | {
+      kind: "updated";
+      state: OnboardingState;
+    }
+  | {
+      kind: "forbidden";
+    }
+  | {
+      kind: "unavailable";
+    };
+
 function cleanRequiredText(
   value: string,
 ): string {
@@ -37,6 +49,44 @@ export class OnboardingService {
     tenant: TenantContext,
   ): Promise<OnboardingState> {
     return this.repository.getState(tenant);
+  }
+
+  async updateBusinessType(
+    tenant: TenantContext,
+    role: OrganizationMemberRole,
+    businessTypeCode: string,
+    now: Date,
+  ): Promise<OnboardingBusinessTypeResult> {
+    if (role === "editor") {
+      return {
+        kind: "forbidden",
+      };
+    }
+
+    if (Number.isNaN(now.getTime())) {
+      throw new Error("invalid_date");
+    }
+
+    const normalizedCode =
+      businessTypeCode.trim().toLowerCase();
+
+    const updated =
+      await this.repository.updateBusinessType(
+        tenant,
+        normalizedCode,
+        now.toISOString(),
+      );
+
+    if (!updated) {
+      return {
+        kind: "unavailable",
+      };
+    }
+
+    return {
+      kind: "updated",
+      state: await this.repository.getState(tenant),
+    };
   }
 
   async updateIdentity(
