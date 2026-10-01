@@ -1,6 +1,7 @@
 import { normalizeLoginEmail } from "@techabanca/domain";
 import { Hono, type Context } from "hono";
 import {
+  RegistrationRepository,
   SessionRepository,
   UserAuthRepository,
 } from "../repositories";
@@ -11,6 +12,7 @@ import {
 } from "../http/session-cookie";
 import { PasswordHasher } from "../security/password-hasher";
 import { AuthSessionService } from "../services/auth-session-service";
+import { RegistrationService } from "../services/registration-service";
 
 type CatalogueAppEnv = {
   Bindings: Env;
@@ -33,7 +35,7 @@ function requestId(c: Context): string {
 
 function errorResponse(
   c: Context,
-  status: 400 | 401 | 500,
+  status: 400 | 401 | 409 | 500,
   code: string,
   message: string,
 ) {
@@ -99,6 +101,73 @@ async function parseLoginInput(
   };
 }
 
+type RegistrationInput = {
+  email: string;
+  password: string;
+  displayName: string;
+  organizationName: string;
+};
+
+async function parseRegistrationInput(
+  c: Context,
+): Promise<RegistrationInput | null> {
+  let body: unknown;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    return null;
+  }
+
+  if (
+    typeof body !== "object"
+    || body === null
+  ) {
+    return null;
+  }
+
+  const record = body as Record<string, unknown>;
+  const email = record.email;
+  const password = record.password;
+  const displayName = record.displayName;
+  const organizationName = record.organizationName;
+
+  if (
+    typeof email !== "string"
+    || typeof password !== "string"
+    || typeof displayName !== "string"
+    || typeof organizationName !== "string"
+  ) {
+    return null;
+  }
+
+  const normalizedEmail = normalizeLoginEmail(email);
+  const cleanDisplayName = displayName.trim();
+  const cleanOrganizationName =
+    organizationName.trim();
+
+  if (
+    normalizedEmail.length < 3
+    || normalizedEmail.length > 320
+    || !normalizedEmail.includes("@")
+    || password.length < 12
+    || password.length > 128
+    || cleanDisplayName.length < 1
+    || cleanDisplayName.length > 120
+    || cleanOrganizationName.length < 1
+    || cleanOrganizationName.length > 160
+  ) {
+    return null;
+  }
+
+  return {
+    email: normalizedEmail,
+    password,
+    displayName: cleanDisplayName,
+    organizationName: cleanOrganizationName,
+  };
+}
+
 function sessionPayload(session: {
   userPublicId: string;
   email: string;
@@ -121,6 +190,80 @@ function sessionPayload(session: {
 
 export function createAuthRoutes() {
   const auth = new Hono<CatalogueAppEnv>();
+
+  auth.post("/register", async (c) => {
+    const input = await parseRegistrationInput(c);
+
+    if (!input) {
+      return errorResponse(
+        c,
+        400,
+        "invalid_request",
+        "Valid account and business details are required.",
+      );
+    }
+
+    try {
+      const registration =
+        new RegistrationService(
+          new RegistrationRepository(c.env.DB),
+        );
+
+      const result = await registration.register(
+        input,
+        new Date(),
+      );
+
+      if (result.kind === "conflict") {
+        return errorResponse(
+          c,
+          409,
+          "account_unavailable",
+          "An account could not be created with those details.",
+        );
+      }
+
+      writeSessionCookie(
+        c,
+        result.account.token,
+      );
+      requestId(c);
+
+      return c.json(
+        {
+          data: {
+            user: {
+              id: result.account.user.publicId,
+              email: result.account.user.email,
+              displayName:
+                result.account.user.displayName,
+              emailVerified: false,
+            },
+            organization: {
+              id:
+                result.account.organization.publicId,
+              name:
+                result.account.organization.name,
+              role:
+                result.account.organization.role,
+            },
+            session: {
+              expiresAt:
+                result.account.expiresAt,
+            },
+          },
+        },
+        201,
+      );
+    } catch {
+      return errorResponse(
+        c,
+        500,
+        "internal_error",
+        "The account could not be created.",
+      );
+    }
+  });
 
   auth.post("/login", async (c) => {
     const input = await parseLoginInput(c);
