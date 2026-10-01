@@ -245,6 +245,43 @@ async function completeThemePrerequisites() {
     .run();
 }
 
+async function completeSlugPrerequisites() {
+  await completeThemePrerequisites();
+
+  const catalogue = await env.DB
+    .prepare(
+      `SELECT id
+       FROM catalogues
+       WHERE organization_id = ?
+         AND deleted_at IS NULL
+       LIMIT 1`,
+    )
+    .bind(ORG_ID)
+    .first<{ id: number }>();
+
+  if (!catalogue) {
+    throw new Error(
+      "catalogue_fixture_missing",
+    );
+  }
+
+  await env.DB
+    .prepare(
+      `INSERT INTO catalogue_website_settings (
+         catalogue_id,
+         theme_code,
+         created_at,
+         updated_at
+       ) VALUES (?, 'professional', ?, ?)`,
+    )
+    .bind(
+      catalogue.id,
+      NOW,
+      NOW,
+    )
+    .run();
+}
+
 async function sessionCookie(
   userId: number,
 ): Promise<string> {
@@ -405,6 +442,7 @@ describe("onboarding HTTP foundation", () => {
       catalogueStarted: false,
       contactsComplete: false,
       themeComplete: false,
+      slugComplete: false,
     });
 
     expect(JSON.stringify(body)).not.toContain(
@@ -1410,6 +1448,342 @@ describe("onboarding HTTP foundation", () => {
       .first<{ count: number }>();
 
     expect(count?.count).toBe(0);
+  });
+
+  it("reports normalized public slug availability for the current catalogue", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug-availability?slug=Acme%20Industrial%20Tools",
+        {
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+          },
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json<{
+      data: {
+        slug: string;
+        available: boolean;
+        reason: string;
+      };
+    }>();
+
+    expect(body.data).toEqual({
+      slug: "acme-industrial-tools",
+      available: true,
+      reason: "available",
+    });
+  });
+
+  it("keeps reserved and onboarding-internal public slugs unavailable", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const reserved = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug-availability?slug=billing",
+        {
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+          },
+        },
+      ),
+    );
+
+    expect(reserved.status).toBe(200);
+
+    const reservedBody = await reserved.json<{
+      data: {
+        available: boolean;
+        reason: string;
+      };
+    }>();
+
+    expect(reservedBody.data).toMatchObject({
+      available: false,
+      reason: "reserved",
+    });
+
+    const internal = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug-availability?slug=draft-my-catalogue",
+        {
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+          },
+        },
+      ),
+    );
+
+    expect(internal.status).toBe(200);
+
+    const internalBody = await internal.json<{
+      data: {
+        available: boolean;
+        reason: string;
+      };
+    }>();
+
+    expect(internalBody.data).toMatchObject({
+      available: false,
+      reason: "reserved",
+    });
+  });
+
+  it("allows an owner to claim a normalized public catalogue slug", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            slug: "  Acme Industrial Tools  ",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+
+    const body = await response.json<{
+      data: {
+        catalogue: {
+          slug: string | null;
+          slugClaimed: boolean;
+        } | null;
+        progress: {
+          slugComplete: boolean;
+        };
+      };
+    }>();
+
+    expect(body.data.catalogue).toMatchObject({
+      slug: "acme-industrial-tools",
+      slugClaimed: true,
+    });
+
+    expect(
+      body.data.progress.slugComplete,
+    ).toBe(true);
+
+    const persisted = await env.DB
+      .prepare(
+        `SELECT slug
+         FROM catalogues
+         WHERE organization_id = ?
+           AND deleted_at IS NULL
+         LIMIT 1`,
+      )
+      .bind(ORG_ID)
+      .first<{ slug: string }>();
+
+    expect(persisted?.slug).toBe(
+      "acme-industrial-tools",
+    );
+  });
+
+  it("rejects a public slug already claimed by another active catalogue", async () => {
+    await completeSlugPrerequisites();
+
+    await env.DB
+      .prepare(
+        `INSERT INTO organizations (
+           id,
+           public_id,
+           name,
+           timezone,
+           status,
+           created_at,
+           updated_at
+         ) VALUES (
+           98202,
+           'org_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+           'Another Catalogue Owner',
+           'Asia/Kolkata',
+           'active',
+           ?,
+           ?
+         )`,
+      )
+      .bind(NOW, NOW)
+      .run();
+
+    await env.DB
+      .prepare(
+        `INSERT INTO catalogues (
+           public_id,
+           organization_id,
+           name,
+           slug,
+           mode,
+           status,
+           created_at,
+           updated_at
+         ) VALUES (
+           'cat_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+           98202,
+           'Already Claimed',
+           'claimed-business',
+           'products',
+           'draft',
+           ?,
+           ?
+         )`,
+      )
+      .bind(NOW, NOW)
+      .run();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            slug: "claimed-business",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "slug_unavailable",
+    );
+
+    const unchanged = await env.DB
+      .prepare(
+        `SELECT slug
+         FROM catalogues
+         WHERE organization_id = ?
+           AND deleted_at IS NULL
+         LIMIT 1`,
+      )
+      .bind(ORG_ID)
+      .first<{ slug: string }>();
+
+    expect(unchanged?.slug).toMatch(
+      /^draft-[a-f0-9]{32}$/,
+    );
+  });
+
+  it("requires a selected theme before public slug claiming", async () => {
+    await completeThemePrerequisites();
+
+    const cookie = await sessionCookie(OWNER_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            slug: "needs-theme-first",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "onboarding_prerequisite_required",
+    );
+  });
+
+  it("prevents editors from claiming a public catalogue slug", async () => {
+    await completeSlugPrerequisites();
+
+    const cookie = await sessionCookie(EDITOR_ID);
+
+    const response = await exports.default.fetch(
+      new Request(
+        "https://catalogue.test/api/v1/onboarding/slug",
+        {
+          method: "PATCH",
+          headers: {
+            ...tenantHeaders(cookie),
+            Origin: "https://catalogue.test",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            slug: "editor-cannot-claim",
+          }),
+        },
+      ),
+    );
+
+    expect(response.status).toBe(403);
+
+    const body = await response.json<{
+      error: {
+        code: string;
+      };
+    }>();
+
+    expect(body.error.code).toBe(
+      "insufficient_permissions",
+    );
+
+    const unchanged = await env.DB
+      .prepare(
+        `SELECT slug
+         FROM catalogues
+         WHERE organization_id = ?
+           AND deleted_at IS NULL
+         LIMIT 1`,
+      )
+      .bind(ORG_ID)
+      .first<{ slug: string }>();
+
+    expect(unchanged?.slug).toMatch(
+      /^draft-[a-f0-9]{32}$/,
+    );
   });
 
   it("rejects malformed identity input", async () => {

@@ -4,6 +4,8 @@ import {
   type TenantContext,
 } from "@techabanca/domain";
 import type {
+  CatalogueSlugAvailability,
+  CatalogueSlugRepository,
   OnboardingRepository,
   OnboardingState,
 } from "../repositories";
@@ -83,6 +85,31 @@ export type OnboardingThemeResult =
     }
   | {
       kind: "unavailable";
+    }
+  | {
+      kind: "prerequisite_required";
+    };
+
+export type OnboardingSlugAvailabilityResult =
+  | {
+      kind: "checked";
+      availability: CatalogueSlugAvailability;
+    }
+  | {
+      kind: "prerequisite_required";
+    };
+
+export type OnboardingSlugClaimResult =
+  | {
+      kind: "updated";
+      state: OnboardingState;
+    }
+  | {
+      kind: "forbidden";
+    }
+  | {
+      kind: "unavailable";
+      availability: CatalogueSlugAvailability;
     }
   | {
       kind: "prerequisite_required";
@@ -184,12 +211,143 @@ function normalizedEmail(
 export class OnboardingService {
   constructor(
     private readonly repository: OnboardingRepository,
+    private readonly slugRepository: CatalogueSlugRepository,
   ) {}
 
   state(
     tenant: TenantContext,
   ): Promise<OnboardingState> {
     return this.repository.getState(tenant);
+  }
+
+  async slugAvailability(
+    tenant: TenantContext,
+    candidate: string,
+  ): Promise<OnboardingSlugAvailabilityResult> {
+    const state =
+      await this.repository.getState(tenant);
+
+    if (
+      !state.progress.themeComplete
+      || state.catalogue === null
+    ) {
+      return {
+        kind: "prerequisite_required",
+      };
+    }
+
+    return {
+      kind: "checked",
+      availability:
+        await this.slugRepository
+          .checkAvailabilityForCatalogue(
+            candidate,
+            tenant,
+            state.catalogue.id,
+          ),
+    };
+  }
+
+  async claimSlug(
+    tenant: TenantContext,
+    role: OrganizationMemberRole,
+    candidate: string,
+    now: Date,
+  ): Promise<OnboardingSlugClaimResult> {
+    if (role === "editor") {
+      return {
+        kind: "forbidden",
+      };
+    }
+
+    if (Number.isNaN(now.getTime())) {
+      throw new Error("invalid_date");
+    }
+
+    const state =
+      await this.repository.getState(tenant);
+
+    if (
+      !state.progress.themeComplete
+      || state.catalogue === null
+    ) {
+      return {
+        kind: "prerequisite_required",
+      };
+    }
+
+    const availability =
+      await this.slugRepository
+        .checkAvailabilityForCatalogue(
+          candidate,
+          tenant,
+          state.catalogue.id,
+        );
+
+    if (!availability.available) {
+      return {
+        kind: "unavailable",
+        availability,
+      };
+    }
+
+    try {
+      const claimed =
+        await this.repository.claimCatalogueSlug(
+          tenant,
+          {
+            cataloguePublicId:
+              state.catalogue.id,
+            slug: availability.slug,
+            updatedAt: now.toISOString(),
+          },
+        );
+
+      if (!claimed) {
+        const after =
+          await this.slugRepository
+            .checkAvailabilityForCatalogue(
+              candidate,
+              tenant,
+              state.catalogue.id,
+            );
+
+        if (!after.available) {
+          return {
+            kind: "unavailable",
+            availability: after,
+          };
+        }
+
+        throw new Error(
+          "catalogue_slug_claim_failed",
+        );
+      }
+    } catch (error) {
+      const after =
+        await this.slugRepository
+          .checkAvailabilityForCatalogue(
+            candidate,
+            tenant,
+            state.catalogue.id,
+          );
+
+      if (!after.available) {
+        return {
+          kind: "unavailable",
+          availability: after,
+        };
+      }
+
+      throw error;
+    }
+
+    return {
+      kind: "updated",
+      state: await this.repository.getState(
+        tenant,
+      ),
+    };
   }
 
   async updateTheme(

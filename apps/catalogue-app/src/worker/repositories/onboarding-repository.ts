@@ -69,6 +69,7 @@ export type OnboardingState = {
     catalogueStarted: boolean;
     contactsComplete: boolean;
     themeComplete: boolean;
+    slugComplete: boolean;
   };
 };
 
@@ -299,11 +300,14 @@ export class OnboardingRepository {
         ? {
             id: catalogue.public_id,
             name: catalogue.name,
-            slug: catalogue.slug.startsWith("draft-")
-              ? null
-              : catalogue.slug,
+            slug:
+              catalogue.slug
+                === `draft-${catalogue.public_id.slice(4).toLowerCase()}`
+                ? null
+                : catalogue.slug,
             slugClaimed:
-              !catalogue.slug.startsWith("draft-"),
+              catalogue.slug
+                !== `draft-${catalogue.public_id.slice(4).toLowerCase()}`,
             mode: catalogue.mode,
             status: catalogue.status,
           }
@@ -356,8 +360,57 @@ export class OnboardingRepository {
           || identity.whatsapp_number !== null
           || identity.email !== null,
         themeComplete: selectedTheme !== null,
+        slugComplete:
+          catalogue !== null
+          && catalogue.slug
+            !== `draft-${catalogue.public_id.slice(4).toLowerCase()}`,
       },
     };
+  }
+
+  async claimCatalogueSlug(
+    tenant: TenantContext,
+    input: {
+      cataloguePublicId: string;
+      slug: string;
+      updatedAt: string;
+    },
+  ): Promise<boolean> {
+    const result = await this.db
+      .prepare(
+        `UPDATE catalogues AS target
+         SET
+           slug = ?,
+           updated_at = ?,
+           version = version + 1
+         WHERE target.organization_id = ?
+           AND target.public_id = ?
+           AND target.status = 'draft'
+           AND target.deleted_at IS NULL
+           AND NOT EXISTS (
+             SELECT 1
+             FROM reserved_slugs rs
+             WHERE rs.slug = ? COLLATE NOCASE
+           )
+           AND NOT EXISTS (
+             SELECT 1
+             FROM catalogues other
+             WHERE other.slug = ? COLLATE NOCASE
+               AND other.id <> target.id
+               AND other.deleted_at IS NULL
+           )`,
+      )
+      .bind(
+        input.slug,
+        input.updatedAt,
+        tenant.organizationId,
+        input.cataloguePublicId,
+        input.slug,
+        input.slug,
+      )
+      .run();
+
+    return (result.meta.changes ?? 0) > 0;
   }
 
   async upsertTheme(

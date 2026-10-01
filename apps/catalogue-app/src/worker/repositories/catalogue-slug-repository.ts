@@ -1,6 +1,7 @@
 import {
   isValidCatalogueSlug,
   normalizeCatalogueSlug,
+  type TenantContext,
 } from "@techabanca/domain";
 
 export type CatalogueSlugAvailability = {
@@ -26,7 +27,10 @@ export class CatalogueSlugRepository {
       };
     }
 
-    if (slug.startsWith("deleted-")) {
+    if (
+      slug.startsWith("draft-")
+      || slug.startsWith("deleted-")
+    ) {
       return {
         slug,
         available: false,
@@ -80,5 +84,31 @@ export class CatalogueSlugRepository {
       available: !claimed,
       reason: claimed ? "claimed" : "available",
     };
+  }
+
+  async checkAvailabilityForCatalogue(
+    candidate: string,
+    tenant: TenantContext,
+    cataloguePublicId: string,
+  ): Promise<CatalogueSlugAvailability> {
+    const catalogue = await this.db
+      .prepare(
+        `SELECT id
+         FROM catalogues
+         WHERE organization_id = ?
+           AND public_id = ?
+           AND deleted_at IS NULL
+         LIMIT 1`,
+      )
+      .bind(
+        tenant.organizationId,
+        cataloguePublicId,
+      )
+      .first<{ id: number }>();
+
+    return this.checkAvailability(
+      candidate,
+      catalogue?.id,
+    );
   }
 }

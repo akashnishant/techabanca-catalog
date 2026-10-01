@@ -6,7 +6,10 @@ import {
 } from "../http/api-response";
 import { requireAuthentication } from "../middleware/require-authentication";
 import { requireTenantAccess } from "../middleware/require-tenant-access";
-import { OnboardingRepository } from "../repositories";
+import {
+  CatalogueSlugRepository,
+  OnboardingRepository,
+} from "../repositories";
 import {
   OnboardingService,
   type OnboardingIdentityInput,
@@ -17,6 +20,7 @@ function onboardingService(
 ): OnboardingService {
   return new OnboardingService(
     new OnboardingRepository(db),
+    new CatalogueSlugRepository(db),
   );
 }
 
@@ -90,6 +94,177 @@ export function createOnboardingRoutes() {
           500,
           "internal_error",
           "Onboarding state could not be loaded.",
+        );
+      }
+    },
+  );
+
+  routes.get(
+    "/slug-availability",
+    requireAuthentication,
+    requireTenantAccess,
+    async (c) => {
+      const candidate =
+        c.req.query("slug")?.trim() ?? "";
+
+      if (
+        candidate.length === 0
+        || candidate.length > 160
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A catalogue slug is required.",
+        );
+      }
+
+      try {
+        const access = c.get("tenantAccess");
+        const service = onboardingService(c.env.DB);
+        const result =
+          await service.slugAvailability(
+            access.tenant,
+            candidate,
+          );
+
+        if (
+          result.kind ===
+          "prerequisite_required"
+        ) {
+          return apiError(
+            c,
+            400,
+            "onboarding_prerequisite_required",
+            "Select a catalogue theme before choosing a public URL.",
+          );
+        }
+
+        ensureApiRequestId(c);
+
+        return c.json({
+          data: result.availability,
+        });
+      } catch {
+        return apiError(
+          c,
+          500,
+          "internal_error",
+          "Slug availability could not be checked.",
+        );
+      }
+    },
+  );
+
+  routes.patch(
+    "/slug",
+    requireAuthentication,
+    requireTenantAccess,
+    async (c) => {
+      const access = c.get("tenantAccess");
+
+      let body: unknown;
+
+      try {
+        body = await c.req.json();
+      } catch {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid JSON request body is required.",
+        );
+      }
+
+      if (
+        typeof body !== "object"
+        || body === null
+        || typeof (
+          body as Record<string, unknown>
+        ).slug !== "string"
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A catalogue slug is required.",
+        );
+      }
+
+      const candidate = (
+        body as Record<string, string>
+      ).slug.trim();
+
+      if (
+        candidate.length === 0
+        || candidate.length > 160
+      ) {
+        return apiError(
+          c,
+          400,
+          "invalid_request",
+          "A valid catalogue slug is required.",
+        );
+      }
+
+      try {
+        const service = onboardingService(c.env.DB);
+        const result =
+          await service.claimSlug(
+            access.tenant,
+            access.role,
+            candidate,
+            new Date(),
+          );
+
+        if (result.kind === "forbidden") {
+          return apiError(
+            c,
+            403,
+            "insufficient_permissions",
+            "Owner or admin access is required.",
+          );
+        }
+
+        if (
+          result.kind ===
+          "prerequisite_required"
+        ) {
+          return apiError(
+            c,
+            400,
+            "onboarding_prerequisite_required",
+            "Select a catalogue theme before choosing a public URL.",
+          );
+        }
+
+        if (result.kind === "unavailable") {
+          const reason =
+            result.availability.reason;
+
+          return apiError(
+            c,
+            400,
+            "slug_unavailable",
+            reason === "invalid"
+              ? "Choose a valid catalogue slug."
+              : reason === "reserved"
+                ? "That catalogue slug is reserved."
+                : "That catalogue slug is already in use.",
+          );
+        }
+
+        ensureApiRequestId(c);
+
+        return c.json({
+          data: result.state,
+        });
+      } catch {
+        return apiError(
+          c,
+          500,
+          "internal_error",
+          "Catalogue slug could not be claimed.",
         );
       }
     },
