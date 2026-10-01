@@ -26,6 +26,14 @@ export class CatalogueSlugRepository {
       };
     }
 
+    if (slug.startsWith("deleted-")) {
+      return {
+        slug,
+        available: false,
+        reason: "reserved",
+      };
+    }
+
     const reserved = await this.db
       .prepare(
         `SELECT slug
