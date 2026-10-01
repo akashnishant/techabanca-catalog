@@ -4,5 +4,15 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), cloudflare()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    cloudflare({
+      // Keep Vite development on the same local Cloudflare state
+      // that repository-root Wrangler migration commands populate.
+      persistState: {
+        path: "../../.wrangler/state",
+      },
+    }),
+  ],
 });
