@@ -16,6 +16,7 @@ import {
   type AuthoringCategory,
   type AuthoringItem,
 } from "./authoring-api";
+import { CategoriesManager } from "./CategoriesManager";
 
 type WorkspaceView =
   | "home"
@@ -1221,77 +1222,24 @@ export function AuthoringWorkspace({
                 </section>
               )}
 
-              {activeView === "categories" && (
-                <section className="rounded-2xl border border-[#dfe5e2] bg-white shadow-[0_12px_36px_rgba(8,16,20,0.04)]">
-                  <div className="border-b border-[#e7ece9] px-5 py-5 sm:px-6">
-                    <p className="text-xs font-black uppercase tracking-[0.13em] text-[#789c45]">
-                      Categories
-                    </p>
-                    <h1 className="mt-2 text-2xl font-semibold tracking-[-0.03em]">
-                      Category structure
-                    </h1>
-                    <p className="mt-1 text-sm text-[#6f7c77]">
-                      Current hierarchy preview. Create, edit, reorder, and archive controls arrive in the next Slice.
-                    </p>
-                  </div>
-
-                  <div className="grid gap-3 p-5 sm:grid-cols-2 sm:p-6 xl:grid-cols-3">
-                    {(snapshot?.categories
-                      ?? []).map(
-                      (category) => {
-                        const parent =
-                          snapshot?.categories
-                            .find(
-                              (candidate) =>
-                                candidate.id
-                                === category.parentId,
-                            );
-
-                        return (
-                          <div
-                            key={category.id}
-                            className="rounded-xl border border-[#e2e7e4] bg-[#fbfcfb] p-4"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-semibold text-[#1d292e]">
-                                  {category.name}
-                                </div>
-                                <div className="mt-1 truncate text-xs text-[#7a8782]">
-                                  /{category.slug}
-                                </div>
-                              </div>
-                              <span
-                                className={[
-                                  "rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em]",
-                                  category.isVisible
-                                    ? "bg-[#eef7e1] text-[#52742c]"
-                                    : "bg-[#f0f2f1] text-[#7a8782]",
-                                ].join(" ")}
-                              >
-                                {category.isVisible
-                                  ? "Visible"
-                                  : "Hidden"}
-                              </span>
-                            </div>
-                            <div className="mt-4 border-t border-[#e8ecea] pt-3 text-xs text-[#77837e]">
-                              {parent
-                                ? `Child of ${parent.name}`
-                                : "Root category"}
-                            </div>
-                          </div>
-                        );
-                      },
-                    )}
-
-                    {(snapshot?.categories
-                      .length ?? 0) === 0 && (
-                      <div className="col-span-full rounded-xl border border-dashed border-[#d8e1dd] px-5 py-10 text-center text-sm text-[#7a8782]">
-                        No active categories are configured yet.
-                      </div>
-                    )}
-                  </div>
-                </section>
+              {activeView === "categories" && snapshot && (
+                <CategoriesManager
+                  organizationId={
+                    selectedOrganization.id
+                  }
+                  categories={
+                    snapshot.categories
+                  }
+                  canMutate={
+                    selectedOrganization.role
+                      === "owner"
+                    || selectedOrganization.role
+                      === "admin"
+                  }
+                  onRefresh={() =>
+                    loadSnapshot(true)
+                  }
+                />
               )}
 
               {activeView === "enquiries" && (
