@@ -2,6 +2,7 @@ export * from "./asset-repository";
 export * from "./audit-event-repository";
 export * from "./business-profile-repository";
 export * from "./catalogue-item-repository";
+export * from "./category-repository";
 export * from "./catalogue-slug-repository";
 export * from "./enquiry-repository";
 export * from "./moderation-case-repository";
