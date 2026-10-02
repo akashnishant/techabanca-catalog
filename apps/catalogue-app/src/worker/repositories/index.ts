@@ -1,4 +1,5 @@
 export * from "./asset-repository";
+export * from "./attribute-repository";
 export * from "./audit-event-repository";
 export * from "./business-profile-repository";
 export * from "./catalogue-item-repository";
