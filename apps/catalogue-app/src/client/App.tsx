@@ -10,6 +10,7 @@ import {
   type AuthOrganization,
   type AuthUser,
 } from "./auth-api";
+import { AuthoringWorkspace } from "./AuthoringWorkspace";
 import {
   OnboardingApiError,
   onboardingApi,
@@ -879,6 +880,14 @@ function Workspace({
     useState<OnboardingState | null>(null);
   const [activeStep, setActiveStep] =
     useState<OnboardingStepId>("identity");
+  const [workspaceOpen, setWorkspaceOpen] =
+    useState(
+      () =>
+        typeof window !== "undefined"
+        && window.location.hash.startsWith(
+          "#workspace",
+        ),
+    );
 
   const [identityForm, setIdentityForm] =
     useState({
@@ -1120,6 +1129,50 @@ function Workspace({
     onboarding?.catalogue?.mode === "services"
       ? "service"
       : "product";
+
+  if (
+    onboarding?.progress.readyToPublish
+    && workspaceOpen
+  ) {
+    return (
+      <AuthoringWorkspace
+        brandLight={<Brand />}
+        brandDark={<Brand variant="dark" />}
+        user={state.user}
+        organizations={state.organizations}
+        selectedOrganization={selected}
+        catalogueSlug={
+          onboarding.catalogue?.slug
+          ?? null
+        }
+        onSelectOrganization={(
+          organizationId,
+        ) => {
+          setSelectedId(organizationId);
+          setOnboarding(null);
+          setActiveStep("identity");
+          setError(null);
+          setSuccess(null);
+        }}
+        onEditSetup={() => {
+          setWorkspaceOpen(false);
+          setActiveStep("review");
+
+          if (
+            typeof window !== "undefined"
+          ) {
+            window.history.replaceState(
+              null,
+              "",
+              "#onboarding/review",
+            );
+          }
+        }}
+        onLogout={logout}
+        loggingOut={loggingOut}
+      />
+    );
+  }
 
   return (
     <main className="min-h-screen bg-[#f5f7f6] text-[#081014] [&_a[href]]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_select:not(:disabled)]:cursor-pointer">
@@ -2351,6 +2404,39 @@ function Workspace({
                         </div>
                       </div>
                     </div>
+
+                    {onboarding.progress.readyToPublish && (
+                      <div className="mt-7 flex flex-col gap-3 rounded-xl border border-[#d8e2d3] bg-[#fbfdf8] p-4 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm font-semibold text-[#1f2b30]">
+                            Continue to catalogue authoring
+                          </div>
+                          <p className="mt-1 text-xs leading-5 text-[#6f7c77]">
+                            Open the authenticated workspace to manage catalogue data. Publishing remains a separate controlled milestone.
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkspaceOpen(true);
+
+                            if (
+                              typeof window
+                                !== "undefined"
+                            ) {
+                              window.history.replaceState(
+                                null,
+                                "",
+                                "#workspace/home",
+                              );
+                            }
+                          }}
+                          className="h-11 shrink-0 rounded-xl bg-[#0b1519] px-5 text-sm font-bold text-white transition hover:bg-[#152126]"
+                        >
+                          Open workspace
+                        </button>
+                      </div>
+                    )}
 
                     <div className="mt-7 rounded-xl border border-[#dfe5e2] bg-[#f8faf9] p-5">
                       <div className="flex gap-3">
