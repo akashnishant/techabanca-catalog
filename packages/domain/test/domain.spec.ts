@@ -29,6 +29,8 @@ import {
   utcNow,
 } from "../src";
 
+import { isValidCurrencyCode, normalizeCurrencyCode } from "../src";
+
 describe("domain primitives", () => {
   it("creates opaque prefixed public IDs", () => {
     const userId = createPublicId("usr");
@@ -92,6 +94,15 @@ describe("domain primitives", () => {
     expect(isValidItemSlug("-invalid")).toBe(false);
   });
 
+  it("normalizes and validates currency-code format", () => {
+    expect(normalizeCurrencyCode(" inr ")).toBe("INR");
+    expect(normalizeCurrencyCode("usd")).toBe("USD");
+    expect(isValidCurrencyCode("INR")).toBe(true);
+    expect(isValidCurrencyCode("USD")).toBe(true);
+    expect(isValidCurrencyCode("inr")).toBe(false);
+    expect(isValidCurrencyCode("IN1")).toBe(false);
+    expect(isValidCurrencyCode("EURO")).toBe(false);
+  });
   it("classifies supported catalogue asset MIME types", () => {
     expect(classifyAssetMimeType("image/jpeg")).toBe("image");
     expect(classifyAssetMimeType(" IMAGE/WEBP ")).toBe("image");
