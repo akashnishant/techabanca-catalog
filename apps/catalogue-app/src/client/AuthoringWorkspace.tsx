@@ -17,6 +17,7 @@ import {
   type AuthoringItem,
 } from "./authoring-api";
 import { CategoriesManager } from "./CategoriesManager";
+import { CatalogueManager } from "./CatalogueManager";
 
 type WorkspaceView =
   | "home"
@@ -1119,107 +1120,15 @@ export function AuthoringWorkspace({
                 </>
               )}
 
-              {activeView === "catalogue" && (
-                <section className="rounded-2xl border border-[#dfe5e2] bg-white shadow-[0_12px_36px_rgba(8,16,20,0.04)]">
-                  <div className="border-b border-[#e7ece9] px-5 py-5 sm:px-6">
-                    <p className="text-xs font-black uppercase tracking-[0.13em] text-[#789c45]">
-                      Catalogue
-                    </p>
-                    <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
-                        <h1 className="text-2xl font-semibold tracking-[-0.03em]">
-                          Catalogue items
-                        </h1>
-                        <p className="mt-1 text-sm text-[#6f7c77]">
-                          Read-only workspace preview. Search, filters, and authoring controls are added in the dedicated Catalogue UI slice.
-                        </p>
-                      </div>
-                      <div className="text-xs font-semibold text-[#77837e]">
-                        Catalogue ID:{" "}
-                        <span className="font-mono">
-                          {snapshot?.catalogueId
-                            ?? "-"}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="divide-y divide-[#edf1ef]">
-                    {(snapshot?.items ?? [])
-                      .slice(0, 12)
-                      .map((item) => (
-                        <div
-                          key={item.id}
-                          className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-6"
-                        >
-                          <div className="min-w-0">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <div className="truncate text-sm font-semibold text-[#1d292e]">
-                                {item.name}
-                              </div>
-                              {item.isFeatured && (
-                                <span className="rounded-md bg-[#eef7e1] px-2 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-[#52742c]">
-                                  Featured
-                                </span>
-                              )}
-                            </div>
-                            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-[#77837e]">
-                              <span className="capitalize">
-                                {item.itemType}
-                              </span>
-                              <span>
-                                {statusLabel(
-                                  item.status,
-                                )}
-                              </span>
-                              <span>
-                                /{item.slug}
-                              </span>
-                              {item.sku && (
-                                <span>
-                                  SKU {item.sku}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 text-xs text-[#77837e]">
-                            {item.showPrice
-                            && item.priceMinorUnits
-                              !== null
-                            && item.currencyCode ? (
-                              <span className="font-semibold text-[#344047]">
-                                {item.currencyCode}{" "}
-                                {(
-                                  item.priceMinorUnits
-                                  / 100
-                                ).toLocaleString(
-                                  "en-IN",
-                                  {
-                                    maximumFractionDigits: 2,
-                                  },
-                                )}
-                              </span>
-                            ) : (
-                              <span>
-                                Price hidden
-                              </span>
-                            )}
-                            <span className="rounded-lg border border-[#e0e6e3] bg-[#fafbfa] px-2 py-1 font-bold">
-                              v{item.version}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-
-                    {(snapshot?.items.length
-                      ?? 0) === 0 && (
-                      <div className="px-6 py-12 text-center text-sm text-[#7a8782]">
-                        No active catalogue items are available.
-                      </div>
-                    )}
-                  </div>
-                </section>
+              {activeView === "catalogue" && snapshot && (
+                <CatalogueManager
+                  organizationId={
+                    selectedOrganization.id
+                  }
+                  categories={
+                    snapshot.categories
+                  }
+                />
               )}
 
               {activeView === "categories" && snapshot && (
