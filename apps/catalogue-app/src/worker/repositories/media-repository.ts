@@ -76,7 +76,7 @@ export class MediaRepository {
       + "SELECT i.id, ?, ?, ?, ?, ? FROM catalogue_items i WHERE i.id IN (" + guard + ")",
     ).bind(document.assetId, document.label, order, Number(document.isVisible), now, itemId, token, tenant.organizationId)));
     const result = await this.db.batch(statements);
-    return result[0].meta.changes === 1;
+    return (result[0].meta.changes ?? 0) > 0;
   }
   async readyAssets(tenant: TenantContext, kind: "image" | "document", after: string | null) {
     const result = await this.db.prepare("SELECT " + assetColumns + " FROM assets a "
@@ -104,6 +104,6 @@ export class MediaRepository {
       "UPDATE catalogue_website_settings SET logo_asset_id = ?, hero_asset_id = ?, version = version + 1, updated_at = ? "
       + "WHERE version = ? AND catalogue_id IN (SELECT id FROM catalogues WHERE organization_id = ? AND deleted_at IS NULL)",
     ).bind(logo, hero, new Date().toISOString(), version, tenant.organizationId).run();
-    return result.meta.changes === 1;
+    return (result.meta.changes ?? 0) > 0;
   }
 }

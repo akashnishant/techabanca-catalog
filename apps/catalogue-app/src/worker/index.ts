@@ -8,6 +8,7 @@ import { createAuthRoutes } from "./routes/auth-routes";
 import { createCategoryRoutes } from "./routes/category-routes";
 import { createItemRoutes } from "./routes/item-routes";
 import { createMediaRoutes } from "./routes/media-routes";
+import { createPublicationRoutes } from "./routes/publication-routes";
 import { createOnboardingRoutes } from "./routes/onboarding-routes";
 import { createTenantAccessRoutes } from "./routes/tenant-access-routes";
 
@@ -28,6 +29,7 @@ app.get("/api/health", (c) =>
 app.route("/api/v1/auth", createAuthRoutes());
 app.route("/api/v1/auth", createTenantAccessRoutes());
 app.route("/api/v1/onboarding", createOnboardingRoutes());
+app.route("/api/v1/catalogue", createPublicationRoutes());
 app.route("/api/v1/catalogue", createMediaRoutes());
 app.route("/api/v1/catalogue", createAssetRoutes());
 app.route("/api/v1/catalogue", createAttributeRoutes());

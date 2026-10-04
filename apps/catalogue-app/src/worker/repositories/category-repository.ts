@@ -350,7 +350,7 @@ export class CategoryRepository {
       )
       .run();
 
-    return result.meta.changes === 1;
+    return (result.meta.changes ?? 0) > 0;
   }
 
   async softDelete(

@@ -42,16 +42,15 @@ export const requireAuthentication =
         }
 
         c.set("authSession", session);
-        await next();
       } catch {
-        clearSessionCookie(c);
-
         return apiError(
           c,
-          500,
-          "internal_error",
-          "Authentication could not be validated.",
+          503,
+          "authentication_unavailable",
+          "Authentication is temporarily unavailable. Please try again.",
         );
       }
+
+      await next();
     },
   );

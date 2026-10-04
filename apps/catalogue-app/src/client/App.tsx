@@ -733,8 +733,12 @@ function isStepComplete(
     case "slug":
       return value.progress.slugComplete;
     case "review":
-      return value.progress.readyToPublish;
+      return completedSetup(value);
   }
+}
+
+function completedSetup(value: OnboardingState | null): boolean {
+  return value?.progress.setupComplete ?? value?.progress.readyToPublish ?? false;
 }
 
 function normalizedSlugPreview(
@@ -1131,7 +1135,8 @@ function Workspace({
       : "product";
 
   if (
-    onboarding?.progress.readyToPublish
+    onboarding !== null
+    && completedSetup(onboarding)
     && workspaceOpen
   ) {
     return (
@@ -2334,7 +2339,7 @@ function Workspace({
                       <div
                         className={[
                           "inline-flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold",
-                          onboarding.progress.readyToPublish
+                          completedSetup(onboarding)
                             ? "border-[#cfe2b4] bg-[#f7fbf2] text-[#3f5f1f]"
                             : "border-[#dfe5e2] bg-[#f7f9f8] text-[#68756f]",
                         ].join(" ")}
@@ -2342,13 +2347,13 @@ function Workspace({
                         <span
                           className={[
                             "size-2 rounded-full",
-                            onboarding.progress.readyToPublish
+                            completedSetup(onboarding)
                               ? "bg-[#8fc84a]"
                               : "bg-[#a7b0ac]",
                           ].join(" ")}
                         />
-                        {onboarding.progress.readyToPublish
-                          ? "Ready for publishing"
+                        {completedSetup(onboarding)
+                          ? "Setup complete"
                           : "Setup incomplete"}
                       </div>
                     </div>
@@ -2379,7 +2384,7 @@ function Workspace({
                             : "Not reserved"}
                         </div>
                         <div className="mt-1 text-sm text-[#74807b]">
-                          Reserved - not publicly live
+                          Review live status and publishing in Website
                         </div>
                       </div>
 
@@ -2414,14 +2419,14 @@ function Workspace({
                       </div>
                     </div>
 
-                    {onboarding.progress.readyToPublish && (
+                    {completedSetup(onboarding) && (
                       <div className="mt-7 flex flex-col gap-3 rounded-xl border border-[#d8e2d3] bg-[#fbfdf8] p-4 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                           <div className="text-sm font-semibold text-[#1f2b30]">
                             Continue to catalogue authoring
                           </div>
                           <p className="mt-1 text-xs leading-5 text-[#6f7c77]">
-                            Open the authenticated workspace to manage catalogue data. Publishing remains a separate controlled milestone.
+                            Open your workspace to manage saved content, private previews and publishing.
                           </p>
                         </div>
                         <button

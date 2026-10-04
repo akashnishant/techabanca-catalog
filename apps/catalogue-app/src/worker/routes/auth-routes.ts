@@ -35,7 +35,7 @@ function requestId(c: Context): string {
 
 function errorResponse(
   c: Context,
-  status: 400 | 401 | 409 | 500,
+  status: 400 | 401 | 409 | 500 | 503,
   code: string,
   message: string,
 ) {
@@ -367,13 +367,11 @@ export function createAuthRoutes() {
         data: sessionPayload(session),
       });
     } catch {
-      clearSessionCookie(c);
-
       return errorResponse(
         c,
-        500,
-        "internal_error",
-        "The session could not be validated.",
+        503,
+        "authentication_unavailable",
+        "The session is temporarily unavailable. Please try again.",
       );
     }
   });

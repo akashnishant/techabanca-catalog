@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { hasPublicIdPrefix, isValidItemSlug } from "@techabanca/domain";
+import { hasPublicIdPrefix, isValidItemSlug, verifyPreview } from "@techabanca/domain";
 import { publicThemeCss } from "@techabanca/themes";
 import type { PublicBindings } from "./model";
 import { PublicRepository } from "./repository";
@@ -8,11 +8,22 @@ import { about, catalogue, contact, home, itemDetail, unavailable } from "./rend
 import { serveMedia } from "./media";
 import { faviconSvg } from "./brand";
 
-const app = new Hono<{ Bindings: PublicBindings }>();
+const app = new Hono<{ Bindings: PublicBindings; Variables: { previewPrefix: string; previewRevision: number } }>();
 app.use("*", async (c, next) => {
   await next();
+  const privatePreview = new URL(c.req.url).pathname.startsWith("/preview/");
+  const prefix = c.get("previewPrefix");
+  if (prefix && c.req.method !== "HEAD" && c.res.headers.get("Content-Type")?.startsWith("text/html")) {
+    const body = (await c.res.text()).replace(/<meta name="robots" content="[^"]*">/, '<meta name="robots" content="noindex, nofollow">')
+      .replace(/<meta property="og:image" content="[^"]*">/, "")
+      .replace(/(href|src|action)="\/(?!\/)/g, '$1="' + prefix + '/')
+      .replace('<main id="main">', '<main id="main"><div class="wrap notice" role="status">Private preview · Revision ' + c.get("previewRevision")
+        + '. This link is temporary. Changes remain private until you publish this revision.</div>');
+    c.res = new Response(body, { status: c.res.status, headers: c.res.headers });
+  }
+  if (privatePreview) c.header("X-Robots-Tag", "noindex, nofollow");
   c.header("X-Content-Type-Options", "nosniff");
-  c.header("Referrer-Policy", "strict-origin-when-cross-origin");
+  c.header("Referrer-Policy", privatePreview ? "no-referrer" : "strict-origin-when-cross-origin");
   c.header("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   c.header("Cache-Control", "no-store");
@@ -36,17 +47,32 @@ app.all("*", async c => {
     return html(request, unavailable("Method not allowed", "Use a catalogue page link to continue."), 405);
   }
   const url = new URL(request.url);
-  const host = resolveHost(url, c.env.LOCAL_PREVIEW === "true");
+  let host = resolveHost(url, c.env.LOCAL_PREVIEW === "true");
   if (!host) return html(request, unavailable(), 404);
   if (!host.local && url.protocol !== "https:") {
     url.protocol = "https:"; url.port = "";
     return c.redirect(url.toString(), 308);
   }
   const repository = new PublicRepository(c.env.DB);
-  const site = await repository.site(host.slug);
+  let site;
+  let path = url.pathname;
+  const preview = /^\/preview\/([^/]+)(\/.*)?$/.exec(path);
+  if (preview) {
+    const claims = await verifyPreview(preview[1], c.env.PUBLICATION_PREVIEW_SECRET);
+    if (!claims || claims.slug !== host.slug) return html(request, unavailable(), 404);
+    site = await repository.previewSite(host.slug, claims.publicationId, new Date(claims.expiresAt * 1000).toISOString(), new Date().toISOString());
+    if (!site) return html(request, unavailable(), 404);
+    const prefix = "/preview/" + preview[1];
+    c.set("previewPrefix", prefix); c.set("previewRevision", site.revision_number);
+    host = { ...host, preview: true };
+    if (!preview[2]) return c.redirect(prefix + "/", 308);
+    path = preview[2];
+  } else site = await repository.site(host.slug);
   if (!site) return html(request, unavailable(), 404);
-  const path = url.pathname;
-  if (path.length > 1 && path.endsWith("/")) return c.redirect(path.slice(0, -1) + url.search, 308);
+  if (path.length > 1 && path.endsWith("/")) return c.redirect((c.get("previewPrefix") ?? "") + path.slice(0, -1) + url.search, 308);
+  if (preview && path === "/theme.css") return new Response(publicThemeCss(c.req.query("theme") ?? "professional"), { headers: { "Content-Type": "text/css; charset=utf-8" } });
+  if (preview && path === "/favicon.svg") return new Response(faviconSvg, { headers: { "Content-Type": "image/svg+xml; charset=utf-8" } });
+
   const mediaMatch = /^\/media\/(pub_[a-f0-9]{32})\/(ast_[a-f0-9]{32})$/.exec(path);
   if (mediaMatch) {
     if (mediaMatch[1] !== site.publication_public_id || !hasPublicIdPrefix(mediaMatch[2], "ast")) return html(request, unavailable(), 404);

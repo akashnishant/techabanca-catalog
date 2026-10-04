@@ -444,6 +444,7 @@ describe("onboarding HTTP foundation", () => {
       themeComplete: false,
       slugComplete: false,
       firstItemComplete: false,
+      setupComplete: false,
       readyToPublish: false,
     });
 
@@ -2248,6 +2249,7 @@ describe("onboarding HTTP foundation", () => {
       themeComplete: true,
       slugComplete: true,
       firstItemComplete: true,
+      setupComplete: true,
       readyToPublish: true,
     });
   });

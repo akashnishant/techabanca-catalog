@@ -4,6 +4,8 @@ import {
   type TenantContext,
 } from "@techabanca/domain";
 
+import { publicationPolicySql } from "./publication-policy";
+
 type EntitlementRow = {
   status: "trialing" | "active" | "past_due";
   value_type: "boolean" | "integer" | "string";
@@ -66,5 +68,11 @@ export class EntitlementService {
   ): Promise<number | null> {
     const value = await this.get(tenant, entitlementKey);
     return typeof value === "number" ? value : null;
+  }
+  async canPublish(tenant: TenantContext, allowUnsubscribed: boolean, now: string): Promise<boolean> {
+    const row = await this.db.prepare(`SELECT 1 AS allowed FROM catalogues c JOIN organizations o ON o.id = c.organization_id
+      WHERE c.organization_id = ? AND c.deleted_at IS NULL AND o.status = 'active' AND o.deleted_at IS NULL
+       AND ${publicationPolicySql} LIMIT 1`).bind(tenant.organizationId, now, now, allowUnsubscribed ? 1 : 0).first();
+    return !!row;
   }
 }

@@ -10,8 +10,9 @@ the server-rendered public catalogue with Professional and Modern themes,
 search/filter/pagination, item details and direct contact actions.
 
 The Public Worker reads activated immutable snapshots. Source items marked
-published are not automatically public-live. The publication builder and
-activation workflow are the next milestone.
+published are not automatically public-live. The M7 publication builder and
+activation workflow provide signed private previews, immutable snapshots,
+atomic republishing, revision history and take-offline controls in Website.
 
 Catalogue stays separate from Techabanca Billing: repository, database, storage
 and deployment. No remote Catalogue resources have been provisioned.
@@ -56,8 +57,8 @@ Public health: http://127.0.0.1:5174/health
 
 Local D1/R2 state is retained under the project's ignored `.wrangler` directory.
 Register a local account and complete onboarding to enter the authoring workspace.
-Public local previews require an activated test snapshot and the ignored
-`LOCAL_PREVIEW=true` switch; see [public rendering](docs/public-renderer.md).
+For local preview and publishing configuration, including the shared signing secret,
+see [publishing](docs/publishing.md). Both services must be running.
 
 ## Verification and contracts
 
@@ -67,3 +68,6 @@ See [item and website media](docs/item-media.md) for attachment limits, optimist
 revisions, editor save semantics, private previews and file retention.
 See [public rendering](docs/public-renderer.md) for routes, snapshot and tenant
 boundaries, media responses, themes and local preview configuration.
+
+See [publishing](docs/publishing.md) for signed previews, publication readiness,
+atomic activation, entitlement enforcement and take-offline behavior.

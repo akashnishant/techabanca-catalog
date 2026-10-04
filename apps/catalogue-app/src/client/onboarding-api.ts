@@ -80,6 +80,7 @@ export type OnboardingState = {
     themeComplete: boolean;
     slugComplete: boolean;
     firstItemComplete: boolean;
+    setupComplete?: boolean;
     readyToPublish: boolean;
   };
 };

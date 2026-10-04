@@ -230,7 +230,7 @@ export class AssetLifecycleRepository {
       )
       .run();
 
-    if (result.meta.changes !== 1) {
+    if ((result.meta.changes ?? 0) === 0) {
       return null;
     }
 
@@ -269,7 +269,7 @@ export class AssetLifecycleRepository {
       )
       .run();
 
-    if (result.meta.changes !== 1) {
+    if ((result.meta.changes ?? 0) === 0) {
       return null;
     }
 
@@ -307,7 +307,7 @@ export class AssetLifecycleRepository {
       )
       .run();
 
-    if (result.meta.changes !== 1) {
+    if ((result.meta.changes ?? 0) === 0) {
       return null;
     }
 

@@ -17,6 +17,9 @@ export default defineConfig({
         bindings: {
           TEST_MIGRATIONS: await readD1Migrations(migrationsPath),
           ASSET_UPLOAD_SIGNING_SECRET: "a".repeat(64),
+          PUBLICATION_PREVIEW_SECRET: "b".repeat(64),
+          ALLOW_UNSUBSCRIBED_PUBLISHING: "false",
+          LOCAL_PREVIEW: "false",
         },
       },
     })),

@@ -40,7 +40,8 @@ Production HTTP redirects to HTTPS. Staging pages use `noindex` and production
 canonical URLs.
 
 A request resolves an active public route and publication, then pins every
-snapshot query to that publication. Building revisions are never rendered.
+snapshot query to that publication. Building revisions are accessible only through an unexpired signed M7 preview
+path after the snapshot is sealed; see [publishing](publishing.md).
 Unknown and suspended routes return the same branded 404, including media.
 Responses use `no-store`, so route suspension and revision activation are checked
 on the next request. A request already in progress can finish its pinned revision.
@@ -77,6 +78,11 @@ The D1 ID in the Public Wrangler configuration is a local placeholder. No remote
 resource provisioning, deployment, wildcard DNS, publisher API, signed preview
 tokens or stored enquiry workflow is included in M6. M7 implements publication
 building and atomic activation; M8 supplies deployment and hostname routing.
+
+Signed M7 previews also work on local hosts without activating a public route.
+Their pages and media use no-referrer and noindex/nofollow; navigation and forms
+preserve the signed path. Public search uses literal substring matching to avoid
+D1's 50-byte LIKE/GLOB pattern bound.
 
 ## Verification
 

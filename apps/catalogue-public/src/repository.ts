@@ -20,9 +20,9 @@ export class PublicRepository {
     const conditions = ["i.publication_id = ?"];
     const bindings: Array<string | number> = [site.publication_id];
     if (filters.query) {
-      const query = "%" + filters.query.replace(/[\\%_]/g, match => "\\" + match) + "%";
-      conditions.push("(i.name LIKE ? ESCAPE '\\' OR COALESCE(i.sku, '') LIKE ? ESCAPE '\\' OR COALESCE(i.short_description, '') LIKE ? ESCAPE '\\')");
-      bindings.push(query, query, query);
+      // Literal substring search avoids D1's 50-byte LIKE/GLOB pattern limit.
+      conditions.push("(instr(lower(i.name), lower(?)) > 0 OR instr(lower(COALESCE(i.sku, '')), lower(?)) > 0 OR instr(lower(COALESCE(i.short_description, '')), lower(?)) > 0)");
+      bindings.push(filters.query, filters.query, filters.query);
     }
     if (filters.type !== "all") { conditions.push("i.item_type = ?"); bindings.push(filters.type); }
     if (categoryId) {
@@ -59,5 +59,16 @@ export class PublicRepository {
       + "UNION ALL SELECT object_key, mime_type, 'image', NULL FROM published_item_images WHERE publication_id = ? AND asset_public_id = ? "
       + "UNION ALL SELECT object_key, mime_type, 'document', label FROM published_item_documents WHERE publication_id = ? AND asset_public_id = ? LIMIT 1",
     ).bind(site.publication_id, assetId, site.publication_id, assetId, site.publication_id, assetId, site.publication_id, assetId).first<Media>();
+  }
+  async previewSite(slug: string, publicationId: string, expiresAt: string, now: string): Promise<Site | null> {
+    return this.db.prepare(
+      "SELECT pc.*, p.public_id AS publication_public_id, p.revision_number FROM catalogue_publications p "
+      + "JOIN published_catalogues pc ON pc.publication_id = p.id "
+      + "WHERE pc.slug = ? AND p.public_id = ? AND p.state = 'building' AND p.sealed_at IS NOT NULL "
+      + "AND p.preview_revoked_at IS NULL AND p.preview_expires_at = ? AND p.preview_expires_at > ? "
+      + "AND pc.catalogue_public_id = p.catalogue_public_id "
+      + "AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = pc.slug) "
+      + "AND NOT EXISTS (SELECT 1 FROM public_catalogue_routes r WHERE r.catalogue_public_id = pc.catalogue_public_id AND r.status = 'suspended')",
+    ).bind(slug, publicationId, expiresAt, now).first<Site>();
   }
 }

@@ -18,7 +18,7 @@ import {
 } from "./authoring-api";
 import { CategoriesManager } from "./CategoriesManager";
 import { CatalogueManager } from "./CatalogueManager";
-import { WebsiteMediaManager } from "./WebsiteMediaManager";
+import { WebsiteWorkspace } from "./WebsiteWorkspace";
 import type { CatalogueMode } from "./onboarding-api";
 
 type WorkspaceView =
@@ -962,14 +962,14 @@ export function AuthoringWorkspace({
 
                       <div className="rounded-2xl bg-[#0b1519] p-5 text-white">
                         <div className="text-xs font-bold uppercase tracking-[0.12em] text-white/45">
-                          Reserved public address
+                          Catalogue address
                         </div>
                         <div className="mt-3 break-all text-lg font-semibold">
                           {reservedUrl}
                         </div>
                         <div className="mt-3 flex items-center gap-2 text-xs text-white/55">
                           <span className="size-1.5 rounded-full bg-[#BAF16D]" />
-                          Reserved only - publishing remains separate
+                          Review previews and publishing status in Website
                         </div>
                       </div>
                     </div>
@@ -1181,33 +1181,9 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "website" && (
-                <>
-                <section className="rounded-2xl border border-[#dfe5e2] bg-white p-6 shadow-[0_12px_36px_rgba(8,16,20,0.04)] sm:p-8">
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#789c45]">
-                    Website
-                  </p>
-                  <h1 className="mt-3 text-2xl font-semibold tracking-[-0.025em]">
-                    Public catalogue website
-                  </h1>
-                  <p className="mt-3 max-w-2xl text-sm leading-6 text-[#6f7c77]">
-                    Your reserved address is ready for the controlled renderer and publishing milestones. Draft authoring data is not public.
-                  </p>
-                  <div className="mt-6 max-w-xl rounded-xl border border-[#dfe5e2] bg-[#f8faf9] p-4">
-                    <div className="text-xs font-bold uppercase tracking-[0.12em] text-[#7a8782]">
-                      Reserved address
-                    </div>
-                    <div className="mt-2 break-all text-lg font-semibold">
-                      {reservedUrl}
-                    </div>
-                    <div className="mt-2 text-xs text-[#77837e]">
-                      Reserved only - not publicly live
-                    </div>
-                  </div>
-                </section>
-                <WebsiteMediaManager key={selectedOrganization.id}
+                <WebsiteWorkspace key={selectedOrganization.id}
                   organizationId={selectedOrganization.id}
                   canManage={selectedOrganization.role === "owner" || selectedOrganization.role === "admin"} />
-                </>
               )}
 
               {activeView === "analytics" && (

@@ -3,7 +3,7 @@ import type { ReadyAssetSummary, WebsiteMedia } from "@techabanca/domain";
 import { assetApi } from "./asset-api";
 import { AssetPicker, AssetPreview, mediaButton, mediaError } from "./AssetControls";
 
-export function WebsiteMediaManager({ organizationId, canManage }: { organizationId: string; canManage: boolean }) {
+export function WebsiteMediaManager({ organizationId, canManage, onBlockedChange }: { organizationId: string; canManage: boolean; onBlockedChange?: (blocked: boolean) => void }) {
   const [saved, setSaved] = useState<WebsiteMedia | null>(null);
   const [logo, setLogo] = useState<ReadyAssetSummary | null>(null);
   const [hero, setHero] = useState<ReadyAssetSummary | null>(null);
@@ -25,6 +25,7 @@ export function WebsiteMediaManager({ organizationId, canManage }: { organizatio
   }, [organizationId, reload]);
   const dirty = saved !== null && (saved.logo?.id !== logo?.id || saved.hero?.id !== hero?.id);
   const blocked = loading || saving || logoUploading || heroUploading;
+  useEffect(() => { onBlockedChange?.(blocked || dirty); }, [blocked, dirty, onBlockedChange]);
   async function save() {
     if (!saved || blocked || !canManage) return;
     setSaving(true); setError(null); setMessage(null);
