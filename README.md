@@ -1,35 +1,67 @@
 # Techabanca Catalogue
 
-Standalone Techabanca catalogue SaaS.
+Standalone catalogue SaaS for business products and services.
 
-## Milestone 0
+## Current development state
 
-This repository currently contains only the engineering foundation:
+Authentication/tenancy, resumable onboarding, catalogue authoring, typed item
+specifications, and local asset/media authoring are implemented. Milestone 5 uses
+verified image/PDF uploads, item attachments, reusable uploads, and business
+logo/hero settings.
 
-- `apps/catalogue-app` â€” React + TypeScript management SPA with a Cloudflare Worker API
-- `apps/catalogue-public` â€” Hono + TypeScript public catalogue Worker
-- shared workspace package placeholders
-- TypeScript, Vite, Tailwind CSS, Wrangler, and Cloudflare Workers test infrastructure
+Public catalogue rendering and publishing are the next milestones. The Public
+Worker currently serves its foundation page and health endpoint. Source items
+marked published are not automatically public-live.
 
-No database, authentication, payment, DNS, production resources, or product business logic are created in Milestone 0.
+Catalogue stays separate from Techabanca Billing: repository, database, storage
+and deployment. No remote Catalogue resources have been provisioned.
 
-## Requirements
+## Workspaces
 
-Use a current supported Node.js release. The scaffold enforces Node 20.19+, Node 22.12+, or a newer supported major.
+- `apps/catalogue-app`: React/TypeScript management SPA and same-origin Hono Worker API
+- `apps/catalogue-public`: Hono/TypeScript public Worker, reserved for immutable published read models
+- `packages/domain`: shared types, policies and validation helpers
+- `database/migrations`: additive D1 migrations
+- `docs`: asset HTTP and media-authoring contracts
 
-## Commands
+## Local development (Windows PowerShell)
 
-```powershell
-npm install
-npm run typecheck
-npm run test
-npm run build
-npm run dev:app
-npm run dev:public
-```
+Use npm and a supported Node.js release (the tested local environment is Node
+24.16.0). Install dependencies from the repository root with `npm.cmd install`.
 
-## Git
+Set a cryptographically random, 64-hex-character
+`ASSET_UPLOAD_SIGNING_SECRET` in the App's ignored `.dev.vars`; never commit it.
+See [asset upload documentation](docs/asset-uploads.md).
 
-Initial development branch:
+From the repository root:
 
-`feature/catalogue-foundation`
+~~~powershell
+npm.cmd run db:migrate:local
+npm.cmd run verify
+~~~
+
+Run each service from its own terminal:
+
+~~~powershell
+Set-Location apps/catalogue-app
+npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
+~~~
+
+~~~powershell
+Set-Location apps/catalogue-public
+npm.cmd run dev -- --host 127.0.0.1 --port 5174 --strictPort
+~~~
+
+Management: http://127.0.0.1:5173/
+Public foundation: http://127.0.0.1:5174/
+
+Local D1/R2 state is retained under the project's ignored `.wrangler` directory.
+Register a local account and complete onboarding to enter the authoring workspace.
+
+## Verification and media contracts
+
+`npm.cmd run verify` runs workspace typechecks, tests and production builds.
+Focused media tests are in `apps/catalogue-app/test/media-http.spec.ts`.
+
+See [item and website media](docs/item-media.md) for attachment limits, optimistic
+revisions, editor save semantics, private previews and file retention.

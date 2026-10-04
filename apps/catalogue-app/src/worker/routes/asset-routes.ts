@@ -161,6 +161,9 @@ function assetError(c: AssetContext, error: unknown) {
     if (error.code === "unsupported_mime_type") status = 415;
     return apiError(c, status, error.code, error.message);
   }
+  if (error instanceof Error && error.message.includes("asset_in_use")) {
+    return apiError(c, 409, "asset_in_use", "This file is attached to an item or website. Remove those attachments before deleting the upload.");
+  }
   return apiError(c, 500, "internal_error", "The asset operation could not be completed.");
 }
 
@@ -220,6 +223,23 @@ export function createAssetRoutes() {
     } catch (error) {
       return assetError(c, error);
     }
+  });
+
+  routes.delete("/assets/:assetId", async (c) => {
+    try {
+      requireMutationAccess(c);
+      const version = parseVersion((await readJson(c)).version);
+      const asset = await findAsset(c);
+      const removed = await new AssetLifecycleRepository(c.env.DB).markDeleted(
+        c.get("tenantAccess").tenant,
+        { assetPublicId: asset.publicId, expectedVersion: version, now: new Date().toISOString() },
+      );
+      if (!removed) throw new AssetHttpError(409, "asset_version_conflict", "The file changed since it was loaded. Reload uploads and try again.");
+      // Metadata removal never deletes R2 bytes; immutable publication references
+      // must be accounted for by a later retention/garbage-collection milestone.
+      ensureApiRequestId(c);
+      return c.body(null, 204);
+    } catch (error) { return assetError(c, error); }
   });
 
   routes.put("/assets/:assetId/content", async (c) => {

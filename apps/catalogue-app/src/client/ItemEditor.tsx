@@ -2,6 +2,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
   type FormEvent,
 } from "react";
 import {
@@ -35,6 +36,7 @@ import {
   groupEditorAttributes,
   isFieldPackCode,
 } from "./item-field-presets";
+import { ItemMediaEditor, type ItemMediaHandle } from "./ItemMediaEditor";
 import type {
   CatalogueMode,
 } from "./onboarding-api";
@@ -258,6 +260,9 @@ export function ItemEditor({
     useState(true);
   const [saving, setSaving] =
     useState(false);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const initialMediaItemId = useRef(item?.id ?? null);
+  const mediaRef = useRef<ItemMediaHandle>(null);
   const [formError, setFormError] =
     useState<string | null>(null);
   const [specSearch, setSpecSearch] =
@@ -546,7 +551,7 @@ export function ItemEditor({
     ) {
       if (
         event.key === "Escape"
-        && !saving
+        && !saving && !mediaBusy
       ) {
         onClose();
       }
@@ -566,7 +571,7 @@ export function ItemEditor({
         onKeyDown,
       );
     };
-  }, [onClose, saving]);
+  }, [onClose, saving, mediaBusy]);
 
   useEffect(() => {
     let cancelled = false;
@@ -880,7 +885,7 @@ export function ItemEditor({
   ) {
     event.preventDefault();
 
-    if (saving) {
+    if (saving || mediaBusy) {
       return;
     }
 
@@ -1005,6 +1010,7 @@ export function ItemEditor({
       AuthoringItem | null = null;
 
     try {
+      mediaRef.current?.validate();
       const common = {
         itemType:
           form.itemType,
@@ -1082,6 +1088,7 @@ export function ItemEditor({
         savedItem,
       );
 
+      await mediaRef.current?.save(savedItem.id);
       await onSaved(savedItem);
     } catch (error) {
       if (savedItem !== null) {
@@ -1147,7 +1154,7 @@ export function ItemEditor({
 
       setFormError(
         savedItem !== null
-          ? `Item details were saved, but a specification needs attention. ${friendlyError(error)}`
+          ? `Item details were saved, but media or specifications need attention. ${friendlyError(error)}`
           : friendlyError(error),
       );
     } finally {
@@ -1177,6 +1184,7 @@ export function ItemEditor({
     ) {
       return (
         <select
+          id={`specification-${definition.id}`}
           value={draft.input}
           onChange={(event) =>
             setAttributeDraft(
@@ -1204,6 +1212,7 @@ export function ItemEditor({
 
     return (
       <input
+        id={`specification-${definition.id}`}
         type={
           definition.dataType
             === "number"
@@ -1283,7 +1292,10 @@ export function ItemEditor({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <label className="text-xs font-bold text-[#344047]">
+              <label
+                htmlFor={`specification-${definition.id}`}
+                className="text-xs font-bold text-[#344047]"
+              >
                 {definition.label}
                 {definition.isRequired && (
                   <span className="ml-1 text-[#8a2f25]">
@@ -1315,6 +1327,7 @@ export function ItemEditor({
           >
             <input
               type="checkbox"
+              aria-label={`Show ${definition.label} publicly`}
               checked={
                 draft?.isVisible
                 ?? true
@@ -1349,7 +1362,7 @@ export function ItemEditor({
         if (
           event.target
           === event.currentTarget
-          && !saving
+          && !saving && !mediaBusy
         ) {
           onClose();
         }
@@ -1384,7 +1397,7 @@ export function ItemEditor({
 
           <button
             type="button"
-            disabled={saving}
+            disabled={saving || mediaBusy}
             onClick={onClose}
             aria-label="Close item editor"
             className="grid size-10 shrink-0 place-items-center rounded-xl border border-[#dfe5e2] bg-white text-xl leading-none text-[#66736e] disabled:opacity-50"
@@ -1602,6 +1615,112 @@ export function ItemEditor({
                 </label>
               </div>
             </section>
+
+            <details className="mt-7 rounded-2xl border border-[#e1e7e4] bg-[#fbfcfb] p-4">
+              <summary className="cursor-pointer text-sm font-bold text-[#344047]">
+                Pricing and display
+              </summary>
+              <p className="mt-3 text-xs leading-5 text-[#74807b]">
+                Configure the price and authoring status. Publishing to your public catalogue remains a separate action.
+              </p>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <label className="text-xs font-bold text-[#344047]">
+                  Price
+                  <input
+                    inputMode="decimal"
+                    value={form.price}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        price: event.target.value,
+                      }))
+                    }
+                    placeholder="e.g. 1250.50"
+                    className={inputClassName()}
+                  />
+                </label>
+                <label className="text-xs font-bold text-[#344047]">
+                  Currency
+                  <input
+                    value={form.currencyCode}
+                    maxLength={3}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        currencyCode: event.target.value.toUpperCase(),
+                      }))
+                    }
+                    placeholder="INR"
+                    className={inputClassName()}
+                  />
+                </label>
+                <label className="text-xs font-bold text-[#344047]">
+                  Status
+                  <select
+                    value={form.status}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        status: event.target.value as AuthoringItemStatus,
+                      }))
+                    }
+                    className={inputClassName()}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published source</option>
+                    <option value="hidden">Hidden</option>
+                  </select>
+                </label>
+                <label className="text-xs font-bold text-[#344047]">
+                  Display order
+                  <input
+                    type="number"
+                    min={0}
+                    max={1_000_000}
+                    step={1}
+                    value={form.sortOrder}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        sortOrder: event.target.value,
+                      }))
+                    }
+                    className={inputClassName()}
+                  />
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-[#344047]">
+                  <input
+                    type="checkbox"
+                    checked={form.showPrice}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        showPrice: event.target.checked,
+                      }))
+                    }
+                    className="size-4 accent-[#7eac43]"
+                  />
+                  Show price
+                </label>
+                <label className="inline-flex items-center gap-2 text-xs font-bold text-[#344047]">
+                  <input
+                    type="checkbox"
+                    checked={form.isFeatured}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        isFeatured: event.target.checked,
+                      }))
+                    }
+                    className="size-4 accent-[#7eac43]"
+                  />
+                  Featured item
+                </label>
+              </div>
+            </details>
+
+            <ItemMediaEditor ref={mediaRef} organizationId={organizationId}
+              itemId={initialMediaItemId.current} disabled={saving} onBusy={setMediaBusy} />
 
             <section className="mt-7 border-t border-[#e7ece9] pt-6">
               <div className="flex items-start justify-between gap-4">
@@ -1933,7 +2052,7 @@ export function ItemEditor({
             <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || mediaBusy}
                 onClick={onClose}
                 className="h-11 rounded-xl border border-[#d8e1dd] bg-white px-4 text-sm font-bold text-[#344047] disabled:opacity-50"
               >
@@ -1943,6 +2062,7 @@ export function ItemEditor({
                 type="submit"
                 disabled={
                   saving
+                  || mediaBusy
                   || loadingAttributes
                 }
                 className="h-11 rounded-xl bg-[#0b1519] px-5 text-sm font-bold text-white transition hover:bg-[#152126] disabled:opacity-50"

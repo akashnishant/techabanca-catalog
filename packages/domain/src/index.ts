@@ -11,3 +11,4 @@ export * from "./theme";
 export * from "./time";
 export * from "./tenant";
 export * from "./asset-upload";
+export * from "./media";

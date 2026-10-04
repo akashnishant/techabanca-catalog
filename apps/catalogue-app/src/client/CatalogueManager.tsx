@@ -250,6 +250,8 @@ export function CatalogueManager({
   const [archiveError, setArchiveError] =
     useState<string | null>(null);
   const requestVersion = useRef(0);
+  const editorRequestVersion = useRef(0);
+  const [openingItemId, setOpeningItemId] = useState<string | null>(null);
 
   const orderedCategories = useMemo(
     () => orderCategories(categories),
@@ -362,6 +364,8 @@ export function CatalogueManager({
     setEditorOpen(false);
     setEditingItem(null);
     setArchiveTarget(null);
+    editorRequestVersion.current += 1;
+    setOpeningItemId(null);
   }, [organizationId]);
 
   async function loadMore() {
@@ -431,25 +435,43 @@ export function CatalogueManager({
   }
 
   function openCreate() {
+    editorRequestVersion.current += 1;
+    setOpeningItemId(null);
     setEditingItem(null);
     setEditorOpen(true);
   }
 
-  function openEdit(
+  async function openEdit(
     item: AuthoringItem,
   ) {
-    setEditingItem(item);
-    setEditorOpen(true);
+    const version = ++editorRequestVersion.current;
+    setOpeningItemId(item.id);
+    setError(null);
+
+    try {
+      const result = await authoringApi.item(organizationId, item.id);
+      if (editorRequestVersion.current !== version) return;
+      setEditingItem(result.item);
+      setEditorOpen(true);
+    } catch (requestError) {
+      if (editorRequestVersion.current === version) {
+        setError(requestMessage(requestError));
+      }
+    } finally {
+      if (editorRequestVersion.current === version) {
+        setOpeningItemId(null);
+      }
+    }
   }
 
   async function itemSaved() {
-    setEditorOpen(false);
-    setEditingItem(null);
-
     await Promise.all([
       loadFirstPage(true),
       onWorkspaceRefresh(),
     ]);
+
+    setEditorOpen(false);
+    setEditingItem(null);
   }
 
   async function archiveItem() {
@@ -881,8 +903,10 @@ export function CatalogueManager({
                         <button
                           type="button"
                           onClick={() =>
-                            openEdit(item)
+                            void openEdit(item)
                           }
+                          disabled={openingItemId !== null}
+                          aria-busy={openingItemId === item.id}
                           aria-label={`Edit ${item.name}`}
                           className="grid size-9 place-items-center rounded-lg border border-[#dfe5e2] bg-white text-[#59665f] transition hover:bg-[#f4f7f5]"
                         >
@@ -1023,8 +1047,10 @@ export function CatalogueManager({
                       <button
                         type="button"
                         onClick={() =>
-                          openEdit(item)
+                          void openEdit(item)
                         }
+                        disabled={openingItemId !== null}
+                        aria-busy={openingItemId === item.id}
                         className="inline-flex h-10 flex-1 items-center justify-center gap-2 rounded-xl border border-[#d8e1dd] bg-white text-xs font-bold text-[#344047]"
                       >
                         <CatalogueIcon
@@ -1112,6 +1138,7 @@ export function CatalogueManager({
           onClose={() => {
             setEditorOpen(false);
             setEditingItem(null);
+            void loadFirstPage(true);
           }}
           onSaved={async () => {
             await itemSaved();

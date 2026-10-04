@@ -18,6 +18,7 @@ import {
 } from "./authoring-api";
 import { CategoriesManager } from "./CategoriesManager";
 import { CatalogueManager } from "./CatalogueManager";
+import { WebsiteMediaManager } from "./WebsiteMediaManager";
 import type { CatalogueMode } from "./onboarding-api";
 
 type WorkspaceView =
@@ -1180,6 +1181,7 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "website" && (
+                <>
                 <section className="rounded-2xl border border-[#dfe5e2] bg-white p-6 shadow-[0_12px_36px_rgba(8,16,20,0.04)] sm:p-8">
                   <p className="text-xs font-black uppercase tracking-[0.14em] text-[#789c45]">
                     Website
@@ -1202,6 +1204,10 @@ export function AuthoringWorkspace({
                     </div>
                   </div>
                 </section>
+                <WebsiteMediaManager key={selectedOrganization.id}
+                  organizationId={selectedOrganization.id}
+                  canManage={selectedOrganization.role === "owner" || selectedOrganization.role === "admin"} />
+                </>
               )}
 
               {activeView === "analytics" && (
