@@ -1,5 +1,22 @@
 {
   "name": "techabanca-catalogue-public",
   "compatibility_date": "2026-09-30",
-  "main": "./src/index.ts"
+  "main": "./src/index.ts",
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "techabanca-catalogue-assets"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "techabanca-catalogue-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../database/migrations"
+    }
+  ],
+  "vars": {
+    "LOCAL_PREVIEW": "false"
+  }
 }

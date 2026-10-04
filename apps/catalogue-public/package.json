@@ -12,7 +12,9 @@
     "cf-typegen": "wrangler types"
   },
   "dependencies": {
-    "hono": "^4.13.12"
+    "hono": "^4.13.12",
+    "@techabanca/domain": "*",
+    "@techabanca/themes": "*"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.62.2",

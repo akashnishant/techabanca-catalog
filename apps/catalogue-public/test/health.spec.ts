@@ -11,9 +11,9 @@ describe("catalogue-public Worker", () => {
     });
   });
 
-  it("renders the foundation page", async () => {
+  it("does not resolve an unknown business hostname", async () => {
     const response = await exports.default.fetch("http://example.com/");
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("Public catalogue foundation is running.");
+    expect(response.status).toBe(404);
+    expect(await response.text()).toContain("Catalogue unavailable");
   });
 });
