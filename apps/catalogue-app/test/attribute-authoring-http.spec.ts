@@ -1154,11 +1154,14 @@ describe("attribute authoring HTTP boundary", () => {
       await createDefinition(
         cookie,
         {
+          code: "test-finish-field",
           label: "Finish",
           dataType: "text",
           appliesTo: "product",
         },
       );
+
+    expect(created.status).toBe(201);
 
     const id =
       await createdDefinitionId(

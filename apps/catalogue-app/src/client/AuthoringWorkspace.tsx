@@ -18,6 +18,7 @@ import {
 } from "./authoring-api";
 import { CategoriesManager } from "./CategoriesManager";
 import { CatalogueManager } from "./CatalogueManager";
+import type { CatalogueMode } from "./onboarding-api";
 
 type WorkspaceView =
   | "home"
@@ -46,6 +47,8 @@ type WorkspaceProps = {
   organizations: AuthOrganization[];
   selectedOrganization: AuthOrganization;
   catalogueSlug: string | null;
+  catalogueMode: CatalogueMode;
+  businessTypeCode: string;
   onSelectOrganization: (
     organizationId: string,
   ) => void;
@@ -511,6 +514,8 @@ export function AuthoringWorkspace({
   organizations,
   selectedOrganization,
   catalogueSlug,
+  catalogueMode,
+  businessTypeCode,
   onSelectOrganization,
   onEditSetup,
   onLogout,
@@ -1127,6 +1132,21 @@ export function AuthoringWorkspace({
                   }
                   categories={
                     snapshot.categories
+                  }
+                  catalogueMode={
+                    catalogueMode
+                  }
+                  businessTypeCode={
+                    businessTypeCode
+                  }
+                  canMutate={
+                    selectedOrganization.role
+                      === "owner"
+                    || selectedOrganization.role
+                      === "admin"
+                  }
+                  onWorkspaceRefresh={() =>
+                    loadSnapshot(true)
                   }
                 />
               )}

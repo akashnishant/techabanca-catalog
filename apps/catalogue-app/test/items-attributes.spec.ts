@@ -152,8 +152,8 @@ describe("catalogue items and attributes", () => {
       "SELECT COUNT(*) AS count FROM business_type_attributes",
     ).first<{ count: number }>();
 
-    expect(systemAttributes?.count).toBe(22);
-    expect(mappings?.count).toBe(53);
+    expect(systemAttributes?.count).toBe(208);
+    expect(mappings?.count).toBe(177);
   });
 
   it("enforces catalogue product/service mode", async () => {

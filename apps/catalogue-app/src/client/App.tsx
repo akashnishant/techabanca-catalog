@@ -1145,6 +1145,15 @@ function Workspace({
           onboarding.catalogue?.slug
           ?? null
         }
+        catalogueMode={
+          onboarding.catalogue?.mode
+          ?? "products"
+        }
+        businessTypeCode={
+          onboarding.organization
+            .businessType?.code
+          ?? "other"
+        }
         onSelectOrganization={(
           organizationId,
         ) => {
