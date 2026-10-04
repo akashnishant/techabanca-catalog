@@ -20,6 +20,7 @@ export default defineConfig({
           PUBLICATION_PREVIEW_SECRET: "b".repeat(64),
           ALLOW_UNSUBSCRIBED_PUBLISHING: "false",
           LOCAL_PREVIEW: "false",
+          DEPLOYMENT_ENVIRONMENT: "local",
         },
       },
     })),

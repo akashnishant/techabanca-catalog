@@ -1,20 +1,18 @@
-import { createPublicId, getAssetUploadPolicy, isValidAssetUploadSize, isValidCatalogueSlug, PREVIEW_TTL_SECONDS, signPreview, type TenantContext } from "@techabanca/domain";
+import { createPublicId, getAssetUploadPolicy, isValidAssetUploadSize, isValidCatalogueSlug, cataloguePublicOrigin, PREVIEW_TTL_SECONDS, signPreview, type TenantContext } from "@techabanca/domain";
 import { EntitlementService } from "./entitlement-service";
 import { PublicationRepository, type PublicationRecord, type PublicationSource } from "../repositories/publication-repository";
 
 export class PublicationError extends Error {
  constructor(readonly status: 400 | 403 | 404 | 409 | 413 | 503, readonly code: string, message: string) { super(message); }
 }
-export type PublicationConfig = { PUBLICATION_PREVIEW_SECRET?: string; ALLOW_UNSUBSCRIBED_PUBLISHING?: string; LOCAL_PREVIEW?: string };
+export type PublicationConfig = { PUBLICATION_PREVIEW_SECRET?: string; ALLOW_UNSUBSCRIBED_PUBLISHING?: string; LOCAL_PREVIEW?: string; DEPLOYMENT_ENVIRONMENT?: string };
 export type PublicationActor = { userId: number; role: string };
 function summary(p: PublicationRecord) {
  return { id: p.public_id, revision: p.revision_number, state: p.state, sourceRevision: p.source_authoring_revision,
   createdAt: p.created_at, activatedAt: p.activated_at, expiresAt: p.preview_expires_at, sealed: !!p.sealed_at };
 }
 function origin(slug: string, config: PublicationConfig, requestUrl: string): string {
- if (config.LOCAL_PREVIEW === "true" && ["localhost", "127.0.0.1"].includes(new URL(requestUrl).hostname)) return "http://" + slug + ".localhost:5174";
- const staging = new URL(requestUrl).hostname === "catalogue-preview.techabanca.com";
- return "https://" + slug + (staging ? ".catalogue-preview.techabanca.com" : ".techabanca.com");
+ return cataloguePublicOrigin(slug, config, requestUrl);
 }
 function enabledContact(source: PublicationSource): boolean {
  const h = source.header;

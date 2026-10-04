@@ -1,0 +1,35 @@
+{
+  "milestone": "M8 staging wildcard",
+  "accountId": "00e59d5fe6cfdd53bdc0b8594b5dc8fa",
+  "zone": "techabanca.com",
+  "databaseName": "techabanca-catalogue-staging",
+  "bucketName": "techabanca-catalogue-staging-assets",
+  "managementHost": "catalogue-preview.techabanca.com",
+  "publicSuffix": "catalogue-preview.techabanca.com",
+  "publicRoute": "*.catalogue-preview.techabanca.com/*",
+  "workers": {
+    "app": "techabanca-catalogue-app-staging",
+    "public": "techabanca-catalogue-public-staging"
+  },
+  "protected": {
+    "databaseId": "1bbac4e5-6c75-473d-a9d4-406f31b0abc4",
+    "databaseName": "billdesk-db",
+    "bucketName": "billdesk-files",
+    "worker": "billdesk",
+    "pages": [
+      "taxlume",
+      "techabanca-company"
+    ],
+    "hosts": [
+      "techabanca.com",
+      "www.techabanca.com",
+      "billing.techabanca.com",
+      "billing-api.techabanca.com",
+      "catalogue.techabanca.com"
+    ]
+  },
+  "tlsRequired": [
+    "catalogue-preview.techabanca.com",
+    "*.catalogue-preview.techabanca.com"
+  ]
+}

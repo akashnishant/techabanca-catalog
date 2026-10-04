@@ -1,18 +1,20 @@
-import { isValidCatalogueSlug } from "@techabanca/domain";
+import { isValidCatalogueSlug, readCatalogueDeployment } from "@techabanca/domain";
 import type { Filters } from "./model";
 
 const reserved = new Set(["www", "techabanca", "billing", "billing-api", "catalogue", "catalogue-preview", "catalog", "api", "admin", "support", "help", "legal", "privacy", "security", "mail", "status", "assets", "static"]);
 export type PublicHost = { slug: string; preview: boolean; local: boolean; canonicalOrigin: string };
-export function resolveHost(url: URL, localEnabled = false): PublicHost | null {
+export function resolveHost(url: URL, localEnabled = false, environment?: string): PublicHost | null {
+  const deployment = readCatalogueDeployment(environment);
+  if (deployment === null || (deployment !== "local" && url.port !== "")) return null;
   const hostname = url.hostname.toLowerCase();
   let slug: string;
   let preview = false;
   let local = false;
-  if (hostname.endsWith(".catalogue-preview.techabanca.com")) {
+  if (deployment !== "production" && hostname.endsWith(".catalogue-preview.techabanca.com")) {
     slug = hostname.slice(0, -".catalogue-preview.techabanca.com".length); preview = true;
-  } else if (hostname.endsWith(".techabanca.com")) {
+  } else if (deployment !== "staging" && hostname.endsWith(".techabanca.com")) {
     slug = hostname.slice(0, -".techabanca.com".length);
-  } else if (localEnabled && hostname.endsWith(".localhost")) {
+  } else if (deployment === "local" && localEnabled && hostname.endsWith(".localhost")) {
     slug = hostname.slice(0, -".localhost".length); preview = true; local = true;
   } else return null;
   if (!isValidCatalogueSlug(slug) || reserved.has(slug) || /^(draft|deleted)-/.test(slug)) return null;

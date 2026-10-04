@@ -10,7 +10,19 @@ import { faviconSvg } from "./brand";
 
 const app = new Hono<{ Bindings: PublicBindings; Variables: { previewPrefix: string; previewRevision: number } }>();
 app.use("*", async (c, next) => {
+  const deployment = c.env.DEPLOYMENT_ENVIRONMENT ?? "local";
+  const url = new URL(c.req.url);
+  if (deployment !== "local") {
+    if (deployment !== "production") c.header("X-Robots-Tag", "noindex, nofollow");
+    c.header("Cache-Control", "no-store");
+    c.header("X-Content-Type-Options", "nosniff");
+    if (!resolveHost(url, false, deployment)) return html(c.req.raw, unavailable(), 404);
+    if (url.protocol !== "https:") { url.protocol = "https:"; return c.redirect(url.toString(), 308); }
+  }
+  c.header("X-Techabanca-Environment", deployment);
   await next();
+  c.header("X-Techabanca-Environment", deployment);
+  if (deployment === "staging") c.header("X-Robots-Tag", "noindex, nofollow");
   const privatePreview = new URL(c.req.url).pathname.startsWith("/preview/");
   const prefix = c.get("previewPrefix");
   if (prefix && c.req.method !== "HEAD" && c.res.headers.get("Content-Type")?.startsWith("text/html")) {
@@ -47,7 +59,7 @@ app.all("*", async c => {
     return html(request, unavailable("Method not allowed", "Use a catalogue page link to continue."), 405);
   }
   const url = new URL(request.url);
-  let host = resolveHost(url, c.env.LOCAL_PREVIEW === "true");
+  let host = resolveHost(url, c.env.LOCAL_PREVIEW === "true", c.env.DEPLOYMENT_ENVIRONMENT);
   if (!host) return html(request, unavailable(), 404);
   if (!host.local && url.protocol !== "https:") {
     url.protocol = "https:"; url.port = "";

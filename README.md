@@ -17,6 +17,11 @@ atomic republishing, revision history and take-offline controls in Website.
 Catalogue stays separate from Techabanca Billing: repository, database, storage
 and deployment. No remote Catalogue resources have been provisioned.
 
+M8 adds isolated staging configuration, host boundaries, a PowerShell deployment
+workflow, release validation and routing/TLS checks. Live staging provisioning
+and rollout await the separate remote-resource decision; see [staging](docs/staging.md).
+Production resources and routing remain M17 and M18.
+
 ## Workspaces
 
 - `apps/catalogue-app`: React/TypeScript management SPA and same-origin Hono Worker API

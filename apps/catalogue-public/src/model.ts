@@ -1,4 +1,4 @@
-export type PublicBindings = { DB: D1Database; ASSETS: R2Bucket; LOCAL_PREVIEW?: string; PUBLICATION_PREVIEW_SECRET?: string };
+export type PublicBindings = { DB: D1Database; ASSETS: R2Bucket; LOCAL_PREVIEW?: string; DEPLOYMENT_ENVIRONMENT?: string; PUBLICATION_PREVIEW_SECRET?: string };
 export type Site = {
   publication_id: number; publication_public_id: string; revision_number: number;
   catalogue_public_id: string; slug: string; name: string; mode: "products" | "services" | "both";

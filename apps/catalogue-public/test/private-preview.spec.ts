@@ -113,4 +113,15 @@ describe("signed private publication previews",()=>{
   }
   expect((await get(f,"/catalogue?q="+"q".repeat(101))).status).toBe(400);
  });
+
+ it("keeps a signed preview and its files within the staging deployment",async()=>{
+  const f=await previewFixture(),origin="https://"+f.slug+".catalogue-preview.techabanca.com";
+  const bindings={...env,DEPLOYMENT_ENVIRONMENT:"staging",LOCAL_PREVIEW:"true",PUBLICATION_PREVIEW_SECRET:secret};
+  const response=await app.fetch(new Request(origin+f.prefix+"/"),bindings);
+  expect(response.status).toBe(200);expect(await response.text()).toContain("Private preview");
+  expect(response.headers.get("Referrer-Policy")).toBe("no-referrer");
+  expect((await app.fetch(new Request(f.origin+f.prefix+"/"),bindings)).status).toBe(404);
+  const media=await app.fetch(new Request(origin+f.prefix+"/media/"+f.previewPublicationId+"/"+f.documentId,{headers:{Range:"bytes=0-3"}}),bindings);
+  expect(media.status).toBe(206);expect(await media.text()).toBe("%PDF");expect(media.headers.get("X-Robots-Tag")).toContain("noindex");
+ });
 });

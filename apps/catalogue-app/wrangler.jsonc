@@ -3,7 +3,9 @@
   "compatibility_date": "2026-09-30",
   "main": "./src/worker/index.ts",
   "assets": {
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "binding": "STATIC_ASSETS",
+    "run_worker_first": true
   },
   "r2_buckets": [
     {
@@ -21,6 +23,42 @@
   ],
   "vars": {
     "ALLOW_UNSUBSCRIBED_PUBLISHING": "false",
-    "LOCAL_PREVIEW": "false"
+    "LOCAL_PREVIEW": "false",
+    "DEPLOYMENT_ENVIRONMENT": "local"
+  },
+  "account_id": "00e59d5fe6cfdd53bdc0b8594b5dc8fa",
+  "workers_dev": false,
+  "preview_urls": false,
+  "env": {
+    "staging": {
+      "name": "techabanca-catalogue-app-staging",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [
+        {
+          "pattern": "catalogue-preview.techabanca.com",
+          "custom_domain": true
+        }
+      ],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "techabanca-catalogue-staging",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "../../database/migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS",
+          "bucket_name": "techabanca-catalogue-staging-assets"
+        }
+      ],
+      "vars": {
+        "DEPLOYMENT_ENVIRONMENT": "staging",
+        "LOCAL_PREVIEW": "false",
+        "ALLOW_UNSUBSCRIBED_PUBLISHING": "false"
+      }
+    }
   }
 }

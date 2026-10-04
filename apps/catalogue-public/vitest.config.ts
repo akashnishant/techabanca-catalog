@@ -5,7 +5,8 @@ const migrationsPath = fileURLToPath(new URL("../../database/migrations/", impor
 export default defineConfig({
   plugins: [cloudflareTest(async () => ({
     wrangler: { configPath: "./wrangler.jsonc" },
-    miniflare: { bindings: { TEST_MIGRATIONS: await readD1Migrations(migrationsPath), LOCAL_PREVIEW: "false", PUBLICATION_PREVIEW_SECRET: "b".repeat(64) } },
+    miniflare: { bindings: { TEST_MIGRATIONS: await readD1Migrations(migrationsPath), LOCAL_PREVIEW: "false",
+          DEPLOYMENT_ENVIRONMENT: "local", PUBLICATION_PREVIEW_SECRET: "b".repeat(64) } },
   }))],
   test: { setupFiles: ["./test/apply-migrations.ts"] },
 });

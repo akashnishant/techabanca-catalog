@@ -13,9 +13,16 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "verify": "npm run typecheck && npm run test && npm run build",
+    "verify": "npm run typecheck && npm run test && npm run test:deployment && npm run build",
     "cf-typegen": "npm run cf-typegen --workspaces --if-present",
     "db:migrations:list:local": "npx wrangler d1 migrations list techabanca-catalogue-local --local --persist-to .wrangler/state --config apps/catalogue-app/wrangler.jsonc",
-    "db:migrate:local": "npx wrangler d1 migrations apply techabanca-catalogue-local --local --persist-to .wrangler/state --config apps/catalogue-app/wrangler.jsonc"
+    "db:migrate:local": "npx wrangler d1 migrations apply techabanca-catalogue-local --local --persist-to .wrangler/state --config apps/catalogue-app/wrangler.jsonc",
+    "test:deployment": "node --test scripts/test-staging.spec.mjs",
+    "staging:plan": "node scripts/staging.mjs plan",
+    "staging:build": "node scripts/staging.mjs build",
+    "staging:verify": "node scripts/staging.mjs verify",
+    "staging:provision": "node scripts/staging.mjs provision",
+    "staging:deploy": "node scripts/staging.mjs deploy",
+    "staging:smoke": "node scripts/staging.mjs smoke"
   }
 }

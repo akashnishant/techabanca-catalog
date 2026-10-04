@@ -6,6 +6,7 @@ export * from "./ids";
 export * from "./operations";
 export * from "./publication";
 export * from "./preview-token";
+export * from "./deployment";
 export * from "./slug";
 export * from "./subscription";
 export * from "./theme";

@@ -130,8 +130,8 @@ automated tests override local configuration explicitly.
 Apply migration 0019 from the repository root with `npm.cmd run db:migrate:local`.
 Run `npm.cmd run verify`; start the App and Public workspaces on ports 5173/5174
 as documented in the README. Local publishing modifies local D1/R2 state only.
-Production resource provisioning, deployment and wildcard hostname routing are
-M8. Stored visitor enquiries are M9. Techabanca Billing remains separate.
+M8 provides isolated staging deployment and wildcard hostname routing. Production
+resources and routing remain M17-M18. Stored visitor enquiries are M9. Techabanca Billing remains separate.
 
 ## Verification
 

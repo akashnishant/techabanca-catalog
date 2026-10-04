@@ -77,7 +77,9 @@ state; it is not a publisher or production migration.
 The D1 ID in the Public Wrangler configuration is a local placeholder. No remote
 resource provisioning, deployment, wildcard DNS, publisher API, signed preview
 tokens or stored enquiry workflow is included in M6. M7 implements publication
-building and atomic activation; M8 supplies deployment and hostname routing.
+building and atomic activation; M8 supplies isolated staging deployment and
+hostname routing. Production resources and routing remain M17-M18.
+See [staging](staging.md) for deployment boundaries and the TLS prerequisite.
 
 Signed M7 previews also work on local hosts without activating a public route.
 Their pages and media use no-referrer and noindex/nofollow; navigation and forms
