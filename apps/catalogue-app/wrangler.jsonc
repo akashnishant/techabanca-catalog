@@ -5,6 +5,12 @@
   "assets": {
     "not_found_handling": "single-page-application"
   },
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "techabanca-catalogue-assets"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

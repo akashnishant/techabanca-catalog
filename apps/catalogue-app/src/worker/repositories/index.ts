@@ -15,3 +15,4 @@ export * from "./subscription-repository";
 export * from "./tenant-access-repository";
 export * from "./user-auth-repository";
 export * from "./website-settings-repository";
+export * from "./asset-lifecycle-repository";

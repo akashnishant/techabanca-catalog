@@ -1,7 +1,7 @@
 import type { Context } from "hono";
 import type { CatalogueAppEnv } from "../app-env";
 
-export type ApiErrorStatus = 400 | 401 | 403 | 404 | 409 | 500;
+export type ApiErrorStatus = 400 | 401 | 403 | 404 | 409 | 410 | 413 | 415 | 500 | 503;
 
 export function ensureApiRequestId(
   c: Context<CatalogueAppEnv>,

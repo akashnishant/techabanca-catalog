@@ -4,7 +4,9 @@ import type {
 } from "./repositories";
 
 export type CatalogueAppEnv = {
-  Bindings: Env;
+  Bindings: Omit<Env, "ASSET_UPLOAD_SIGNING_SECRET"> & {
+    ASSET_UPLOAD_SIGNING_SECRET?: string;
+  };
   Variables: {
     authSession: AuthenticatedSessionRecord;
     tenantAccess: ResolvedTenantAccess;

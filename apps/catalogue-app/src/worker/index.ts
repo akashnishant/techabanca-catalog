@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { secureHeaders } from "hono/secure-headers";
 import type { CatalogueAppEnv } from "./app-env";
 import { requireSameOrigin } from "./middleware/require-same-origin";
+import { createAssetRoutes } from "./routes/asset-routes";
 import { createAttributeRoutes } from "./routes/attribute-routes";
 import { createAuthRoutes } from "./routes/auth-routes";
 import { createCategoryRoutes } from "./routes/category-routes";
@@ -26,6 +27,7 @@ app.get("/api/health", (c) =>
 app.route("/api/v1/auth", createAuthRoutes());
 app.route("/api/v1/auth", createTenantAccessRoutes());
 app.route("/api/v1/onboarding", createOnboardingRoutes());
+app.route("/api/v1/catalogue", createAssetRoutes());
 app.route("/api/v1/catalogue", createAttributeRoutes());
 app.route("/api/v1/catalogue", createCategoryRoutes());
 app.route("/api/v1/catalogue", createItemRoutes());

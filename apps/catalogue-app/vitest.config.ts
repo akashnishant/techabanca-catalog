@@ -16,6 +16,7 @@ export default defineConfig({
       miniflare: {
         bindings: {
           TEST_MIGRATIONS: await readD1Migrations(migrationsPath),
+          ASSET_UPLOAD_SIGNING_SECRET: "a".repeat(64),
         },
       },
     })),
