@@ -124,4 +124,11 @@ describe("signed private publication previews",()=>{
   const media=await app.fetch(new Request(origin+f.prefix+"/media/"+f.previewPublicationId+"/"+f.documentId,{headers:{Range:"bytes=0-3"}}),bindings);
   expect(media.status).toBe(206);expect(await media.text()).toBe("%PDF");expect(media.headers.get("X-Robots-Tag")).toContain("noindex");
  });
+ it("disables enquiry capture inside valid private previews",async()=>{
+  const f=await previewFixture(),response=await get(f,"/contact?item=precision-pump"),body=await response.text();
+  expect(response.status).toBe(200); expect(body).toContain("Enquiry forms are available on the published catalogue."); expect(body).not.toContain('name="formToken"');
+  expect((await get(f,"/contact",{method:"POST",headers:{Origin:f.origin,"Content-Type":"application/x-www-form-urlencoded"},body:"contactName=Private"})).status).toBe(405);
+  expect((await env.DB.prepare("SELECT count(*) AS n FROM enquiries WHERE catalogue_id=?").bind(f.n).first<{n:number}>())!.n).toBe(0);
+ });
+
 });

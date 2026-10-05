@@ -78,6 +78,6 @@ test("release manifest rejects a changed artifact", () => {
 });
 
 test("generated empty bindings are accepted", () => {
- const value = config("app"); Object.assign(value, { services: [], kv_namespaces: [], queues: { producers: [], consumers: [] }, durable_objects: { bindings: [] }, workflows: [], triggers: {} }); validateConfig(value, "app");
+ const value = config("app"); Object.assign(value, { services: [], kv_namespaces: [], queues: { producers: [], consumers: [] }, durable_objects: { bindings: [] }, workflows: [], triggers: { crons: ["0 3 * * *"] } }); validateConfig(value, "app");
 });
 for (const [key, value] of [["queues", { producers: [{ binding: "OTHER", queue: "billdesk" }], consumers: [] }], ["durable_objects", { bindings: [{ name: "OTHER", class_name: "Billing" }] }], ["triggers", { crons: ["* * * * *"] }]]) test("generated config refuses active " + key, () => { const stage = config("app"); stage[key] = value; assert.throws(() => validateConfig(stage, "app")); });

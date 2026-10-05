@@ -84,7 +84,9 @@ describe("public catalogue renderer", () => {
     expect(html).toContain('href="tel:+919876543210"');
     expect(html).toContain("mailto:orders%40example.test?subject=Request%20a%20quote%3A%20Precision%20Pump");
     expect((await get(f.origin, "/contact?item=hidden-only")).status).toBe(404);
-    expect(html).not.toContain("<form");
+    expect(html).toContain('action="/contact?item=precision-pump" method="post"');
+    expect(html).toContain('name="formToken"');
+    expect(html).toContain('name="consent"');
   });
   it("honors section and contact visibility without leaking hidden contact data", async () => {
     const f = await createFixture({ show_about: 0, show_categories: 0, show_contact: 0, show_email: 0, show_phone: 0, show_whatsapp: 0 });

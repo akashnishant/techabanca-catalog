@@ -58,7 +58,17 @@
         "DEPLOYMENT_ENVIRONMENT": "staging",
         "LOCAL_PREVIEW": "false",
         "ALLOW_UNSUBSCRIBED_PUBLISHING": "false"
+      },
+      "triggers": {
+        "crons": [
+          "0 3 * * *"
+        ]
       }
     }
+  },
+  "triggers": {
+    "crons": [
+      "0 3 * * *"
+    ]
   }
 }

@@ -162,3 +162,11 @@ checks, even when local tests and artifact dry-runs pass.
 - https://developers.cloudflare.com/workers/configuration/routing/routes/
 - https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
 - https://developers.cloudflare.com/ssl/edge-certificates/universal-ssl/limitations/
+
+## M9 enquiries
+
+The published contact route now accepts signed HTML form submissions. See
+[enquiries](enquiries.md) for capture, access and retention contracts. The App
+Worker alone has the daily 03:00 UTC enquiry retention cron; Public has none.
+This is included in local builds and deployment validation. Live staging and
+its scheduled cleanup still require the separate remote-resource decision.

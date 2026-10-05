@@ -22,6 +22,10 @@ workflow, release validation and routing/TLS checks. Live staging provisioning
 and rollout await the separate remote-resource decision; see [staging](docs/staging.md).
 Production resources and routing remain M17 and M18.
 
+M9 adds signed public enquiry forms, published item context, an authenticated
+business inbox, status changes, team notes, permanent deletion and a 365-day
+availability default with daily retention cleanup. See [enquiries](docs/enquiries.md).
+
 ## Workspaces
 
 - `apps/catalogue-app`: React/TypeScript management SPA and same-origin Hono Worker API

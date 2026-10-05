@@ -1,12 +1,13 @@
 import { Hono } from "hono";
-import { hasPublicIdPrefix, isValidItemSlug, verifyPreview } from "@techabanca/domain";
+import { hasPublicIdPrefix, isValidItemSlug, verifyPreview, signEnquiryToken, verifyEnquiryToken, validateEnquiry, type EnquiryInput } from "@techabanca/domain";
 import { publicThemeCss } from "@techabanca/themes";
-import type { PublicBindings } from "./model";
+import type { Item, PublicBindings } from "./model";
 import { PublicRepository } from "./repository";
 import { FilterError, readFilters, resolveHost } from "./routing";
 import { about, catalogue, contact, home, itemDetail, unavailable } from "./render";
 import { serveMedia } from "./media";
 import { faviconSvg } from "./brand";
+import { captureEnquiry, EnquiryCaptureError, enquiryInput, readEnquiryForm, validateFormToken } from "./enquiry-capture";
 
 const app = new Hono<{ Bindings: PublicBindings; Variables: { previewPrefix: string; previewRevision: number } }>();
 app.use("*", async (c, next) => {
@@ -49,12 +50,12 @@ app.get("/theme.css", c => {
   c.header("Content-Type", "text/css; charset=utf-8");
   return c.body(publicThemeCss(c.req.query("theme") ?? "professional"));
 });
-function html(request: Request, body: string, status = 200): Response {
-  return new Response(request.method === "HEAD" ? null : body, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...(status === 405 ? { Allow: "GET, HEAD" } : {}) } });
+function html(request: Request, body: string, status = 200, extraHeaders: Record<string, string> = {}): Response {
+  return new Response(request.method === "HEAD" ? null : body, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...extraHeaders, ...(status === 405 ? { Allow: "GET, HEAD" } : {}) } });
 }
 app.all("*", async c => {
   const request = c.req.raw;
-  if (request.method !== "GET" && request.method !== "HEAD") {
+  if (request.method !== "GET" && request.method !== "HEAD" && !(request.method === "POST" && new URL(request.url).pathname === "/contact")) {
     c.header("Allow", "GET, HEAD");
     return html(request, unavailable("Method not allowed", "Use a catalogue page link to continue."), 405);
   }
@@ -107,7 +108,54 @@ app.all("*", async c => {
     if (itemSlug && !isValidItemSlug(itemSlug)) return html(request, unavailable("Item not found", "This item is not available in this catalogue.", site, host, path), 404);
     const detail = itemSlug ? await repository.detail(site, itemSlug) : null;
     if (itemSlug && !detail) return html(request, unavailable("Item not found", "This item is not available in this catalogue.", site, host, path), 404);
-    return html(request, contact(site, host, detail?.item));
+    const now = Math.floor(Date.now() / 1000), secret = c.env.PUBLICATION_PREVIEW_SECRET;
+    const token = async (item: Item | null = detail?.item ?? null) => {
+      if (preview || !secret) return undefined;
+      return signEnquiryToken({ v: 1, purpose: "form", slug: site.slug, catalogueId: site.catalogue_public_id,
+        publicationId: site.publication_public_id, itemId: item?.item_public_id ?? null,
+        nonce: crypto.randomUUID().replace(/-/g, ""), issuedAt: now, expiresAt: now + 1800 }, secret, now);
+    };
+    const cookieName = url.protocol === "https:" ? "__Host-techabanca_enquiry_receipt" : "techabanca_enquiry_receipt";
+    if (request.method === "POST") {
+      if (preview || request.headers.get("Origin") !== url.origin
+        || ["cross-site", "same-site"].includes(request.headers.get("Sec-Fetch-Site") ?? ""))
+        return html(request, unavailable("Enquiry not sent", "Use the enquiry form on the published catalogue.", site, host, path), 403);
+      let values: EnquiryInput | undefined, topic: Item | null = detail?.item ?? null;
+      try {
+        const fields = await readEnquiryForm(request);
+        values = enquiryInput(fields);
+        const claims = await validateFormToken(fields, c.env, site, now);
+        topic = null;
+        if (claims.itemId) {
+          topic = await c.env.DB.prepare("SELECT * FROM published_items WHERE publication_id = ? AND item_public_id = ?")
+            .bind(site.publication_id, claims.itemId).first<Item>();
+          if (!topic) throw new EnquiryCaptureError(404, "This item is no longer accepting enquiries.");
+        }
+        if (now - claims.issuedAt < 2) throw new EnquiryCaptureError(429, "Please wait a moment before sending your enquiry.");
+        if (!fields.companyWebsite) {
+          const checked = validateEnquiry(values); values = checked.data;
+          if (Object.keys(checked.errors).length) return html(request, contact(site, host, topic ?? undefined,
+            { formToken: await token(topic), values, errors: checked.errors }), 422);
+          const result = await captureEnquiry(c.env, site, claims, values, topic,
+            request.headers.get("CF-Connecting-IP") ?? "local");
+          if (!result.accepted) {
+            return html(request, contact(site, host, topic ?? undefined, { formToken: await token(topic), values,
+              notice: "Too many enquiries were sent recently. Please wait a few minutes before trying again." }), 429, { "Retry-After": String(result.retryAfter) });
+          }
+        }
+        const receipt = await signEnquiryToken({ ...claims, purpose: "receipt", issuedAt: now, expiresAt: now + 300 }, secret!, now);
+        c.header("Set-Cookie", cookieName + "=" + receipt + "; Path=/; HttpOnly; SameSite=Lax; Max-Age=300"
+          + (url.protocol === "https:" ? "; Secure" : ""));
+        return c.redirect("/contact?sent=1#enquiry", 303);
+      } catch (error) {
+        if (!(error instanceof EnquiryCaptureError)) throw error;
+        return html(request, contact(site, host, topic ?? undefined, { formToken: await token(topic), values, notice: error.message }), error.status, error.status === 429 ? { "Retry-After": "2" } : {});
+      }
+    }
+    const cookie = (request.headers.get("cookie") ?? "").split(";").map(value => value.trim()).find(value => value.startsWith(cookieName + "="))?.slice(cookieName.length + 1);
+    const receipt = cookie && url.searchParams.get("sent") === "1" ? await verifyEnquiryToken(cookie, secret, now) : null;
+    const sent = !!receipt && receipt.purpose === "receipt" && receipt.slug === site.slug && receipt.catalogueId === site.catalogue_public_id;
+    return html(request, contact(site, host, detail?.item, { formToken: sent ? undefined : await token(), preview: !!preview, sent }));
   }
   const itemMatch = /^\/items\/([^/]+)$/.exec(path);
   if (itemMatch) {

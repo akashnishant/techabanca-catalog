@@ -31,5 +31,10 @@
   "tlsRequired": [
     "catalogue-preview.techabanca.com",
     "*.catalogue-preview.techabanca.com"
-  ]
+  ],
+  "enquiryRetention": {
+    "days": 365,
+    "worker": "techabanca-catalogue-app-staging",
+    "cron": "0 3 * * *"
+  }
 }

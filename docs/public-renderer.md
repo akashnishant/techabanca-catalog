@@ -93,3 +93,11 @@ Public tests cover host resolution, snapshot isolation, contact visibility,
 escaping, themes, pagination, revision changes, suspension and media boundaries.
 Local browser checks complement these tests with native navigation, images,
 PDF downloads, keyboard access and desktop/mobile layouts.
+
+## M9 enquiries
+
+The published contact route now accepts signed HTML form submissions. See
+[enquiries](enquiries.md) for capture, access and retention contracts. The App
+Worker alone has the daily 03:00 UTC enquiry retention cron; Public has none.
+This is included in local builds and deployment validation. Live staging and
+its scheduled cleanup still require the separate remote-resource decision.

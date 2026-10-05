@@ -18,6 +18,7 @@ import {
 } from "./authoring-api";
 import { CategoriesManager } from "./CategoriesManager";
 import { CatalogueManager } from "./CatalogueManager";
+import { EnquiriesWorkspace } from "./EnquiriesWorkspace";
 import { WebsiteWorkspace } from "./WebsiteWorkspace";
 import type { CatalogueMode } from "./onboarding-api";
 
@@ -1173,11 +1174,7 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "enquiries" && (
-                <Placeholder
-                  eyebrow="Enquiries"
-                  title="Customer enquiry management"
-                  description="The workspace navigation is ready for enquiry triage. The dedicated enquiry milestone will add New, Contacted, and Closed workflows without turning Catalogue into e-commerce."
-                />
+                <EnquiriesWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} canManage={selectedOrganization.role === "owner" || selectedOrganization.role === "admin"} />
               )}
 
               {activeView === "website" && (

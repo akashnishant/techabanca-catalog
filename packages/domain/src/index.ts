@@ -14,3 +14,5 @@ export * from "./time";
 export * from "./tenant";
 export * from "./asset-upload";
 export * from "./media";
+
+export * from "./enquiry-security";

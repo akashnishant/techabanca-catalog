@@ -25,6 +25,7 @@ export function readPlan() {
   assert.equal(plan.zone, "techabanca.com");
   assert.equal(plan.workers.app, "techabanca-catalogue-app-staging");
   assert.equal(plan.workers.public, "techabanca-catalogue-public-staging");
+  assert.deepEqual(plan.enquiryRetention, { days: 365, worker: plan.workers.app, cron: "0 3 * * *" });
   return plan;
 }
 export function validateResources(resources, plan = readPlan()) {
@@ -62,10 +63,11 @@ export function validateConfig(config, role, { allowPlaceholder = false, plan = 
   assert(UUID.test(id) && id !== BILLING_DB && (allowPlaceholder || id !== ZERO_ID), "Unsafe database binding");
   assert.deepEqual(config.r2_buckets, [{ binding: "ASSETS", bucket_name: plan.bucketName }], "Unsafe storage binding");
   const emptyBindings = { services: [], kv_namespaces: [], queues: { producers: [], consumers: [] },
-    durable_objects: { bindings: [] }, workflows: [], triggers: {} };
+    durable_objects: { bindings: [] }, workflows: [] };
   for (const [key, empty] of Object.entries(emptyBindings)) {
     if (config[key] !== undefined) assert.deepEqual(config[key], empty, "Unexpected external binding or trigger: " + key);
   }
+  assert.deepEqual(config.triggers ?? {}, role === "app" ? { crons: ["0 3 * * *"] } : {}, "Unexpected retention schedule");
   return config;
 }
 function runNode(script, args, options = {}) {

@@ -1,3 +1,4 @@
+import { ENQUIRY_RETENTION_DAYS, type EnquiryInput, type EnquiryErrors } from "@techabanca/domain";
 import type { Category, Detail, Filters, Item, ItemPage, Site } from "./model";
 import { filterUrl, mediaUrl, type PublicHost } from "./routing";
 
@@ -136,7 +137,41 @@ export function about(site: Site, host: PublicHost): string {
     + '</p><div class="actions">' + button("/catalogue", "Explore catalogue") + (site.show_contact === 1 ? button("/contact", "Get in touch", "secondary") : "") + "</div></section>";
   return document(site, host, "/about", "About | " + site.business_name, body);
 }
-export function contact(site: Site, host: PublicHost, item?: Item): string {
+type ContactForm = { formToken?: string; values?: EnquiryInput; errors?: EnquiryErrors; notice?: string; preview?: boolean; sent?: boolean };
+function enquiryForm(site: Site, options: ContactForm, item?: Item): string {
+  if (options.sent) return '<div class="enquiry-success" role="status"><h3>Enquiry sent</h3><p>Your enquiry is in ' + e(site.business_name)
+    + '&rsquo;s inbox. The business can reply using the contact details you provided.</p>' + button("/contact#enquiry", "Send another enquiry", "secondary") + "</div>";
+  if (options.preview) return '<p class="contact-note">Enquiry forms are available on the published catalogue.</p>';
+  if (!options.formToken) return '<p class="contact-note">The enquiry form is temporarily unavailable. Please use a contact option above.</p>';
+  const value = options.values ?? { contactName: "", companyName: "", email: "", phone: "", message: "", consent: false };
+  const errors = options.errors ?? {};
+  const field = (name: "contactName" | "companyName" | "email" | "phone", label: string, type: string, max: number, required = false) =>
+    '<div class="enquiry-field"><label for="enquiry-' + name + '">' + e(label) + (required ? " *" : "") + '</label><input id="enquiry-' + name
+    + '" name="' + name + '" type="' + type + '" maxlength="' + max + '" value="' + e(value[name]) + '"'
+    + (required ? " required" : "") + ' autocomplete="' + ({ contactName: "name", companyName: "organization", email: "email", phone: "tel" })[name] + '"'
+    + (errors[name] ? ' aria-invalid="true" aria-describedby="error-' + name + '"' : "") + ">"
+    + (errors[name] ? '<p class="field-error" id="error-' + name + '">' + e(errors[name]) + "</p>" : "") + "</div>";
+  return (options.notice ? '<p class="form-notice" role="alert">' + e(options.notice) + "</p>" : "")
+    + (Object.keys(errors).length ? '<div class="form-notice" role="alert"><strong>Check your enquiry</strong><ul>'
+      + Object.entries(errors).map(([name, message]) => '<li><a href="#enquiry-' + name + '">' + e(message) + "</a></li>").join("") + "</ul></div>" : "")
+    + '<form class="enquiry-form" action="' + e(item ? "/contact?item=" + encodeURIComponent(item.slug) : "/contact") + '" method="post" aria-label="Send an enquiry">'
+    + '<input type="hidden" name="formToken" value="' + e(options.formToken) + '">'
+    + '<div class="enquiry-trap" aria-hidden="true"><label for="enquiry-website">Leave this field empty</label><input id="enquiry-website" name="companyWebsite" autocomplete="off" tabindex="-1"></div>'
+    + '<div class="enquiry-fields">' + field("contactName", "Your name", "text", 120, true) + field("companyName", "Company (optional)", "text", 160)
+    + field("email", "Email address", "email", 254) + field("phone", "Phone number", "tel", 40) + "</div>"
+    + '<p class="contact-note">Provide an email address or phone number so the business can reply.</p>'
+    + '<div class="enquiry-field"><label for="enquiry-message">Your enquiry *</label><textarea id="enquiry-message" name="message" rows="6" maxlength="5000" required'
+    + (errors.message ? ' aria-invalid="true" aria-describedby="error-message"' : "") + ">" + e(value.message) + "</textarea>"
+    + (errors.message ? '<p class="field-error" id="error-message">' + e(errors.message) + "</p>" : "") + "</div>"
+    + '<label class="enquiry-consent"><input id="enquiry-consent" type="checkbox" name="consent" value="yes" required'
+    + (value.consent ? " checked" : "") + (errors.consent ? ' aria-invalid="true" aria-describedby="error-consent"' : "")
+    + '><span>I agree to share these details with ' + e(site.business_name) + " so they can respond to this enquiry.</span></label>"
+    + (errors.consent ? '<p class="field-error" id="error-consent">' + e(errors.consent) + "</p>" : "")
+    + '<p class="contact-note">Enquiries expire after ' + ENQUIRY_RETENTION_DAYS + ' days from submission and are removed by daily cleanup.</p>'
+    + '<button class="button" type="submit">Send enquiry</button></form>';
+}
+
+export function contact(site: Site, host: PublicHost, item?: Item, options: ContactForm = {}): string {
   const links = contactLinks(site, host, item);
   const body = '<section class="wrap page-top"><span class="eyebrow">Let us help</span><h1>Get in touch</h1><p>Contact ' + e(site.business_name) + " for availability, product details or a quote.</p></section>"
     + '<section class="wrap section contact-grid"><div class="contact-card"><h2>Contact details</h2><dl>'
@@ -148,6 +183,6 @@ export function contact(site: Site, host: PublicHost, item?: Item): string {
     + (item ? '<p>About <strong>' + e(item.name) + "</strong></p>" : "<p>Tell us what you need and we will help you find the right option.</p>") + '<div class="actions">'
     + (links.whatsapp ? button(links.whatsapp, "Enquire on WhatsApp") : "") + (links.email ? button(links.email, "Enquire by email", "secondary") : "") + (links.call ? button(links.call, "Call us", "secondary") : "")
     + (!links.whatsapp && !links.email && !links.call ? "<p>No direct enquiry channel is currently available. Please check back soon.</p>" : "")
-    + '<p class="contact-note">Choose a contact option to continue in your messaging, email or phone app.</p></div></div></section>';
+    + '</div><p class="contact-note">Choose a contact option above, or send your enquiry here.</p>' + enquiryForm(site, options, item) + '</div></section>';
   return document(site, host, "/contact", "Contact | " + site.business_name, body, { noindex: !!item });
 }

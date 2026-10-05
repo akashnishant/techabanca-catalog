@@ -12,6 +12,8 @@ import { createMediaRoutes } from "./routes/media-routes";
 import { createPublicationRoutes } from "./routes/publication-routes";
 import { createOnboardingRoutes } from "./routes/onboarding-routes";
 import { createTenantAccessRoutes } from "./routes/tenant-access-routes";
+import { createEnquiryRoutes } from "./routes/enquiry-routes";
+import { purgeExpiredEnquiries } from "./services/enquiry-service";
 const app = new Hono<CatalogueAppEnv>();
 app.use("*", async (c, next) => {
   c.header("X-Robots-Tag", "noindex, nofollow");
@@ -37,6 +39,7 @@ app.route("/api/v1/auth", createAuthRoutes());
 app.route("/api/v1/auth", createTenantAccessRoutes());
 app.route("/api/v1/onboarding", createOnboardingRoutes());
 app.route("/api/v1/catalogue", createPublicationRoutes());
+app.route("/api/v1/catalogue", createEnquiryRoutes());
 app.route("/api/v1/catalogue", createMediaRoutes());
 app.route("/api/v1/catalogue", createAssetRoutes());
 app.route("/api/v1/catalogue", createAttributeRoutes());
@@ -48,4 +51,10 @@ app.notFound(async c => {
   const response = await c.env.STATIC_ASSETS.fetch(c.req.raw);
   return c.newResponse(response.body, response);
 });
-export default app;
+export default Object.assign(app, {
+  async scheduled(controller: ScheduledController, env: CatalogueAppEnv["Bindings"]) {
+    if (controller.cron !== "0 3 * * *" || readCatalogueDeployment(env.DEPLOYMENT_ENVIRONMENT) === null) return;
+    const cleanup = await purgeExpiredEnquiries(env.DB);
+    if (cleanup.hasMore) throw new Error("enquiry_retention_backlog");
+  },
+});
