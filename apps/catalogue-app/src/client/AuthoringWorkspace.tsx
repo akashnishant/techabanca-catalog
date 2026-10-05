@@ -20,6 +20,7 @@ import { CategoriesManager } from "./CategoriesManager";
 import { CatalogueManager } from "./CatalogueManager";
 import { EnquiriesWorkspace } from "./EnquiriesWorkspace";
 import { WebsiteWorkspace } from "./WebsiteWorkspace";
+import { SharingWorkspace } from "./SharingWorkspace";
 import { AnalyticsWorkspace } from "./AnalyticsWorkspace";
 import { SubscriptionWorkspace } from "./SubscriptionWorkspace";
 import type { CatalogueMode } from "./onboarding-api";
@@ -607,6 +608,12 @@ export function AuthoringWorkspace({
     setMoreOpen(false);
   }, [selectedOrganization.id]);
 
+  useEffect(() => {
+    const onHashChange = () => { setActiveView(hashView()); setMoreOpen(false); };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
+
   const customAttributes = useMemo(
     () =>
       snapshot?.attributes.filter(
@@ -1190,11 +1197,7 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "share" && (
-                <Placeholder
-                  eyebrow="Share"
-                  title="Share centre"
-                  description="This area is reserved for the canonical catalogue URL, QR code, WhatsApp sharing, and item-level share links once the public publishing path is active."
-                />
+                <SharingWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} />
               )}
 
               {activeView === "business" && (

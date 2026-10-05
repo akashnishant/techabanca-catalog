@@ -34,6 +34,9 @@ activated. See [subscriptions](docs/subscriptions.md).
 M11 adds privacy-conscious catalogue analytics, daily UTC aggregates, trends,
 top items, bot/prefetch filtering and privacy opt-outs. See [analytics](docs/analytics.md).
 
+M12 adds canonical catalogue/item links, local QR generation with PNG/SVG downloads,
+clipboard copy and prepared WhatsApp messages. See [sharing](docs/sharing.md).
+
 ## Workspaces
 
 - `apps/catalogue-app`: React/TypeScript management SPA and same-origin Hono Worker API

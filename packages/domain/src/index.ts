@@ -1,4 +1,5 @@
 export * from "./analytics";
+export * from "./sharing";
 export * from "./asset";
 export * from "./auth";
 export * from "./currency";
