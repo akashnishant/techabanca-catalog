@@ -124,6 +124,19 @@ function stageConfig(role) {
   const merged = { ...input, ...input.env.staging }; delete merged.env;
   return validateConfig(merged, role, { allowPlaceholder: true });
 }
+export function authDeploymentSecrets(environment = process.env) {
+  const values = {
+    AUTH_RATE_LIMIT_SECRET: environment.TECHABANCA_CATALOGUE_AUTH_RATE_LIMIT_SECRET,
+    TURNSTILE_SITE_KEY: environment.TECHABANCA_CATALOGUE_TURNSTILE_SITE_KEY,
+    TURNSTILE_SECRET_KEY: environment.TECHABANCA_CATALOGUE_TURNSTILE_SECRET_KEY,
+  };
+  if (!/^[a-f0-9]{64}$/i.test(values.AUTH_RATE_LIMIT_SECRET ?? "")
+    || !/^0x[a-zA-Z0-9_-]{20,100}$/.test(values.TURNSTILE_SITE_KEY ?? "")
+    || !values.TURNSTILE_SECRET_KEY || values.TURNSTILE_SECRET_KEY.length < 20 || values.TURNSTILE_SECRET_KEY.length > 200)
+    throw new Error("Hosted authentication configuration is incomplete or invalid. Configure the Catalogue-only security bindings before deployment.");
+  return values;
+}
+
 function stageSecrets() {
   const appFile = path.join(ROOT, "apps/catalogue-app/.dev.vars.staging");
   const publicFile = path.join(ROOT, "apps/catalogue-public/.dev.vars.staging");
@@ -139,7 +152,7 @@ function stageSecrets() {
   const app = parse(appFile), publicKeys = parse(publicFile);
   assert.deepEqual(Object.keys(app).sort(), ["ASSET_UPLOAD_SIGNING_SECRET", "PUBLICATION_PREVIEW_SECRET"]);
   assert.deepEqual(Object.keys(publicKeys), ["PUBLICATION_PREVIEW_SECRET"]);
-  assert.equal(app.PUBLICATION_PREVIEW_SECRET, publicKeys.PUBLICATION_PREVIEW_SECRET, "Preview signing keys differ");
+  assert(app.PUBLICATION_PREVIEW_SECRET === publicKeys.PUBLICATION_PREVIEW_SECRET, "Preview signing keys differ");
   for (const file of [appFile, publicFile]) { const relative = path.relative(ROOT, file).replaceAll("\\", "/"); assert.equal(git(["check-ignore", relative]).trim(), relative, "Signing configuration must be ignored"); }
   return { app, public: publicKeys };
 }
@@ -236,7 +249,9 @@ export async function deploy() {
     const config = validateConfig(JSON.parse(fs.readFileSync(file, "utf8")), role);
     assert.equal(config.d1_databases[0].database_id, resources.database.id); configs[role] = file;
   }
+  const authSecrets = authDeploymentSecrets();
   const secrets = stageSecrets();
+  secrets.app = { ...secrets.app, ...authSecrets };
   wrangler(["d1", "migrations", "apply", plan.databaseName, "--remote", "--config", configs.app]);
   for (const role of ["app", "public"]) {
     wrangler(["deploy", "--config", configs[role]]);

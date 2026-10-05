@@ -18,6 +18,9 @@ export type CatalogueAppEnv = {
     DEPLOYMENT_ENVIRONMENT?: string;
     STATIC_ASSETS?: Fetcher;
     ASSET_UPLOAD_SIGNING_SECRET?: string;
+    AUTH_RATE_LIMIT_SECRET?: string;
+    TURNSTILE_SITE_KEY?: string;
+    TURNSTILE_SECRET_KEY?: string;
   };
   Variables: {
     authSession: AuthenticatedSessionRecord;

@@ -1,3 +1,4 @@
+import { readRequestJson } from "../http/request-json";
 import { normalizeLoginEmail } from "@techabanca/domain";
 import { Hono, type Context } from "hono";
 import {
@@ -14,13 +15,13 @@ import { PasswordHasher } from "../security/password-hasher";
 import { AuthSessionService } from "../services/auth-session-service";
 import { RegistrationService } from "../services/registration-service";
 
-type CatalogueAppEnv = {
-  Bindings: Env;
-};
+import type { CatalogueAppEnv } from "../app-env";
+import { AuthProtectionError, authSecurityConfiguration, consumeAuthBudget, verifyAuthChallenge } from "../services/auth-abuse-service";
 
 type LoginInput = {
   email: string;
   password: string;
+  turnstileToken?: unknown;
 };
 
 const DUMMY_PASSWORD_HASH =
@@ -35,7 +36,7 @@ function requestId(c: Context): string {
 
 function errorResponse(
   c: Context,
-  status: 400 | 401 | 409 | 500 | 503,
+  status: 400 | 401 | 409 | 429 | 500 | 503,
   code: string,
   message: string,
 ) {
@@ -59,7 +60,7 @@ async function parseLoginInput(
   let body: unknown;
 
   try {
-    body = await c.req.json();
+    body = await readRequestJson(c.req.raw, 16384);
   } catch {
     return null;
   }
@@ -67,6 +68,8 @@ async function parseLoginInput(
   if (
     typeof body !== "object"
     || body === null
+    || Array.isArray(body)
+    || Object.keys(body).some(key => !["email", "password", "turnstileToken"].includes(key))
     || !("email" in body)
     || !("password" in body)
   ) {
@@ -98,6 +101,7 @@ async function parseLoginInput(
   return {
     email: normalizedEmail,
     password,
+    turnstileToken: (body as Record<string, unknown>).turnstileToken,
   };
 }
 
@@ -106,6 +110,7 @@ type RegistrationInput = {
   password: string;
   displayName: string;
   organizationName: string;
+  turnstileToken?: unknown;
 };
 
 async function parseRegistrationInput(
@@ -114,7 +119,7 @@ async function parseRegistrationInput(
   let body: unknown;
 
   try {
-    body = await c.req.json();
+    body = await readRequestJson(c.req.raw, 16384);
   } catch {
     return null;
   }
@@ -122,6 +127,8 @@ async function parseRegistrationInput(
   if (
     typeof body !== "object"
     || body === null
+    || Array.isArray(body)
+    || Object.keys(body).some(key => !["email", "password", "displayName", "organizationName", "turnstileToken"].includes(key))
   ) {
     return null;
   }
@@ -165,6 +172,7 @@ async function parseRegistrationInput(
     password,
     displayName: cleanDisplayName,
     organizationName: cleanOrganizationName,
+    turnstileToken: record.turnstileToken,
   };
 }
 
@@ -191,6 +199,12 @@ function sessionPayload(session: {
 export function createAuthRoutes() {
   const auth = new Hono<CatalogueAppEnv>();
 
+  auth.get("/security", c => {
+    requestId(c);
+    try { return c.json({ data: authSecurityConfiguration(c.env) }); }
+    catch { return errorResponse(c, 503, "authentication_unavailable", "Sign in is temporarily unavailable. Please try again."); }
+  });
+
   auth.post("/register", async (c) => {
     const input = await parseRegistrationInput(c);
 
@@ -204,6 +218,9 @@ export function createAuthRoutes() {
     }
 
     try {
+      authSecurityConfiguration(c.env);
+      await consumeAuthBudget(c.env, c.req.raw, "register", input.email);
+      await verifyAuthChallenge(c.env, c.req.raw, "register", input.turnstileToken);
       const registration =
         new RegistrationService(
           new RegistrationRepository(c.env.DB),
@@ -255,7 +272,11 @@ export function createAuthRoutes() {
         },
         201,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthProtectionError) {
+        if (error.retryAfter) c.header("Retry-After", String(error.retryAfter));
+        return errorResponse(c, error.status, error.code, error.message);
+      }
       return errorResponse(
         c,
         500,
@@ -278,6 +299,9 @@ export function createAuthRoutes() {
     }
 
     try {
+      authSecurityConfiguration(c.env);
+      await consumeAuthBudget(c.env, c.req.raw, "login", input.email);
+      await verifyAuthChallenge(c.env, c.req.raw, "login", input.turnstileToken);
       const users = new UserAuthRepository(c.env.DB);
       const sessions = new SessionRepository(c.env.DB);
       const sessionService = new AuthSessionService(sessions);
@@ -320,7 +344,11 @@ export function createAuthRoutes() {
           },
         },
       });
-    } catch {
+    } catch (error) {
+      if (error instanceof AuthProtectionError) {
+        if (error.retryAfter) c.header("Retry-After", String(error.retryAfter));
+        return errorResponse(c, error.status, error.code, error.message);
+      }
       return errorResponse(
         c,
         500,

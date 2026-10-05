@@ -1,3 +1,4 @@
+import { parseStrictJson } from "@techabanca/domain";
 import { getAssetUploadPolicy, isValidAssetUploadSize } from "@techabanca/domain";
 import { Hono, type Context } from "hono";
 import type { CatalogueAppEnv } from "../app-env";
@@ -13,7 +14,7 @@ async function input(request:Request,keys:string[]):Promise<Record<string,unknow
  try{for(;;){const chunk=await reader.read();if(chunk.done)break;size+=chunk.value.length;if(size>max){await reader.cancel();throw badAdminInput();}chunks.push(chunk.value);}}finally{reader.releaseLock();}
  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
  try{
-  const value:unknown=JSON.parse(new TextDecoder("utf-8",{fatal:true,ignoreBOM:false}).decode(bytes));
+  const value:unknown=parseStrictJson(new TextDecoder("utf-8",{fatal:true,ignoreBOM:false}).decode(bytes));
   if(!value||typeof value!=="object"||Array.isArray(value))throw badAdminInput();
   const record=value as Record<string,unknown>;
   if(Object.keys(record).length!==keys.length||keys.some(key=>!Object.hasOwn(record,key)))throw badAdminInput();

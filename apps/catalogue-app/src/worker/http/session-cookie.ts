@@ -25,6 +25,9 @@ export function sessionCookieNameForRequest(
 export function readSessionCookie(
   c: Context,
 ): string | null {
+  const name = sessionCookieNameForRequest(c);
+  const matches = (c.req.header("Cookie") ?? "").split(";").filter(pair => pair.trim().split("=", 1)[0] === name);
+  if (matches.length !== 1) return null;
   return getCookie(
     c,
     sessionCookieNameForRequest(c),

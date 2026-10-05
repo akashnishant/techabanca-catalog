@@ -1,3 +1,4 @@
+import { parseStrictJson } from "@techabanca/domain";
 import { hasPublicIdPrefix, getAssetUploadPolicy, isValidAssetUploadSize } from "@techabanca/domain";
 import { Hono, type Context } from "hono";
 import type { CatalogueAppEnv } from "../app-env";
@@ -10,7 +11,10 @@ import {
   assetBytesToHex, isAssetSigningSecretConfigured, signAssetUpload, verifyAssetUploadSignature,
 } from "../services/asset-upload-authorization";
 
+import { AssetActorUnavailable } from "../repositories/asset-lifecycle-repository";
 type AssetContext = Context<CatalogueAppEnv>;
+function currentActor(c: AssetContext) { const s = c.get("authSession"); return { userId: s.userId, sessionId: s.sessionId }; }
+function assetRepository(c: AssetContext) { return new AssetLifecycleRepository(c.env.DB, currentActor(c)); }
 
 class AssetHttpError extends Error {
   constructor(readonly status: ApiErrorStatus, readonly code: string, message: string) {
@@ -105,7 +109,7 @@ async function readJson(c: AssetContext): Promise<Record<string, unknown>> {
   const bytes = await readRequestBytes(c.req.raw, 8192);
   let value: unknown;
   try {
-    value = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
+    value = parseStrictJson(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes));
   } catch {
     throw new AssetHttpError(400, "invalid_request", "A valid JSON request body is required.");
   }
@@ -118,7 +122,7 @@ async function findAsset(c: AssetContext): Promise<AssetLifecycleRecord> {
   if (!hasPublicIdPrefix(id, "ast")) {
     throw new AssetHttpError(400, "invalid_asset_id", "A valid asset ID is required.");
   }
-  const asset = await new AssetLifecycleRepository(c.env.DB).findByPublicId(c.get("tenantAccess").tenant, id);
+  const asset = await assetRepository(c).findByPublicId(c.get("tenantAccess").tenant, id);
   if (!asset || asset.deletedAt || asset.status === "deleted") {
     throw new AssetHttpError(404, "asset_not_found", "Asset was not found.");
   }
@@ -126,6 +130,7 @@ async function findAsset(c: AssetContext): Promise<AssetLifecycleRecord> {
 }
 
 async function pendingAsset(c: AssetContext, version: number) {
+  await assetRepository(c).ensureAccess(c.get("tenantAccess").tenant, true);
   const asset = await findAsset(c);
   if (asset.status !== "pending") {
     throw new AssetHttpError(409, "asset_not_pending", "Asset is no longer awaiting upload completion.");
@@ -136,7 +141,7 @@ async function pendingAsset(c: AssetContext, version: number) {
   const now = new Date();
   const expiry = Date.parse(asset.uploadExpiresAt ?? "");
   if (!Number.isFinite(expiry) || now.getTime() >= expiry) {
-    const failed = await new AssetLifecycleRepository(c.env.DB).markFailed(
+    const failed = await assetRepository(c).markFailed(
       c.get("tenantAccess").tenant,
       { assetPublicId: asset.publicId, expectedVersion: version, failureCode: "upload_expired", now: now.toISOString() },
     );
@@ -152,6 +157,7 @@ async function pendingAsset(c: AssetContext, version: number) {
 }
 
 function assetError(c: AssetContext, error: unknown) {
+  if (error instanceof AssetActorUnavailable) return apiError(c, 403, "asset_access_revoked", "Your file access changed. Refresh your workspace.");
   if (error instanceof AssetHttpError) return apiError(c, error.status, error.code, error.message);
   if (error instanceof AssetLifecycleError) {
     let status: ApiErrorStatus = 400;
@@ -194,7 +200,7 @@ export function createAssetRoutes() {
       }
       const access = c.get("tenantAccess");
       const session = c.get("authSession");
-      const asset = await new AssetLifecycleService(c.env.DB).createPendingUpload(
+      const asset = await new AssetLifecycleService(c.env.DB, currentActor(c)).createPendingUpload(
         access.tenant,
         { originalFilename: input.originalFilename, mimeType: input.mimeType,
           expectedByteSize: input.expectedByteSize, createdByUserId: session.userId, now: new Date().toISOString() },
@@ -230,7 +236,7 @@ export function createAssetRoutes() {
       requireMutationAccess(c);
       const version = parseVersion((await readJson(c)).version);
       const asset = await findAsset(c);
-      const removed = await new AssetLifecycleRepository(c.env.DB).markDeleted(
+      const removed = await assetRepository(c).markDeleted(
         c.get("tenantAccess").tenant,
         { assetPublicId: asset.publicId, expectedVersion: version, now: new Date().toISOString() },
       );
@@ -276,6 +282,7 @@ export function createAssetRoutes() {
         sha256: checksum,
       });
       if (!object) throw new AssetHttpError(409, "upload_already_received", "This upload was already received.");
+      await assetRepository(c).ensureAccess(access.tenant, true);
       ensureApiRequestId(c);
       return c.json({ data: { assetId: asset.publicId, version, uploaded: true } }, 201);
     } catch (error) {
@@ -294,7 +301,7 @@ export function createAssetRoutes() {
       if (!object) throw new AssetHttpError(409, "upload_incomplete", "Upload the file before completing the asset.");
       if (!objectMetadataMatches(object, asset, access.tenant.organizationPublicId)) {
         await object.body.cancel();
-        const failed = await new AssetLifecycleRepository(c.env.DB).markFailed(
+        const failed = await assetRepository(c).markFailed(
           access.tenant,
           { assetPublicId: asset.publicId, expectedVersion: version,
             failureCode: "object_metadata_mismatch", now: new Date().toISOString() },
@@ -302,10 +309,12 @@ export function createAssetRoutes() {
         if (!failed) throw new AssetHttpError(409, "asset_version_conflict", "Asset changed while recording verification failure.");
         throw new AssetHttpError(400, "object_metadata_mismatch", "The stored object does not match this upload intent.");
       }
-      const ready = await new AssetLifecycleService(c.env.DB).completeVerifiedUpload(
+      const prefixBytes = new Uint8Array(await object.arrayBuffer());
+      await assetRepository(c).ensureAccess(access.tenant, true);
+      const ready = await new AssetLifecycleService(c.env.DB, currentActor(c)).completeVerifiedUpload(
         access.tenant,
         { assetPublicId: asset.publicId, expectedVersion: version,
-          actualByteSize: object.size, prefixBytes: new Uint8Array(await object.arrayBuffer()),
+          actualByteSize: object.size, prefixBytes,
           checksumSha256: object.checksums.sha256 ? assetBytesToHex(object.checksums.sha256) : null,
           etag: object.etag, verifiedAt: new Date().toISOString() },
       );
@@ -329,6 +338,8 @@ export function createAssetRoutes() {
         await object.body.cancel();
         throw new AssetHttpError(409, "asset_content_changed", "The stored asset content no longer matches the verified asset.");
       }
+      try { await assetRepository(c).ensureAccess(c.get("tenantAccess").tenant); }
+      catch (error) { await object.body.cancel(); throw error; }
       const safeFilename = new TextDecoder().decode(new TextEncoder().encode(asset.originalFilename));
       const encodedFilename = encodeURIComponent(safeFilename).replace(/['()*]/g, (character) =>
         "%" + character.charCodeAt(0).toString(16).toUpperCase(),
@@ -337,6 +348,7 @@ export function createAssetRoutes() {
       c.header("Content-Type", asset.mimeType);
       c.header("Content-Length", String(object.size));
       c.header("Content-Disposition", "attachment; filename*=UTF-8''" + encodedFilename);
+      c.header("Content-Security-Policy", "default-src 'none'; sandbox");
       c.header("X-Content-Type-Options", "nosniff");
       c.header("ETag", object.httpEtag);
       return c.body(object.body);

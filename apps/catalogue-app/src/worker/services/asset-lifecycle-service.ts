@@ -11,6 +11,7 @@ import {
   AssetLifecycleRepository,
   type AssetLifecycleRecord,
 } from "../repositories";
+import type { AssetActor } from "../repositories/asset-lifecycle-repository";
 import {
   AssetVerificationError,
   verifyCompletedAsset,
@@ -49,8 +50,8 @@ function addSeconds(isoTimestamp: string, seconds: number): string {
 export class AssetLifecycleService {
   private readonly repository: AssetLifecycleRepository;
 
-  constructor(db: D1Database) {
-    this.repository = new AssetLifecycleRepository(db);
+  constructor(db: D1Database, actor?: AssetActor) {
+    this.repository = new AssetLifecycleRepository(db, actor);
   }
 
   async createPendingUpload(

@@ -3,7 +3,7 @@ import { randomUUID, createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { test } from "node:test";
-import { ROOT, ZERO_ID, readPlan, validateConfig, validateResources, validateManifest } from "./staging.mjs";
+import { ROOT, ZERO_ID, readPlan, validateConfig, validateResources, validateManifest, authDeploymentSecrets } from "./staging.mjs";
 const plan = readPlan();
 const databaseId = "11111111-1111-4111-8111-111111111111";
 function config(role) {
@@ -81,3 +81,27 @@ test("generated empty bindings are accepted", () => {
  const value = config("app"); Object.assign(value, { services: [], kv_namespaces: [], queues: { producers: [], consumers: [] }, durable_objects: { bindings: [] }, workflows: [], triggers: { crons: ["0 3 * * *"] } }); validateConfig(value, "app");
 });
 for (const [key, value] of [["queues", { producers: [{ binding: "OTHER", queue: "billdesk" }], consumers: [] }], ["durable_objects", { bindings: [{ name: "OTHER", class_name: "Billing" }] }], ["triggers", { crons: ["* * * * *"] }]]) test("generated config refuses active " + key, () => { const stage = config("app"); stage[key] = value; assert.throws(() => validateConfig(stage, "app")); });
+
+const authEnvironment = {
+  TECHABANCA_CATALOGUE_AUTH_RATE_LIMIT_SECRET: "d".repeat(64),
+  TECHABANCA_CATALOGUE_TURNSTILE_SITE_KEY: "0x" + "e".repeat(26),
+  TECHABANCA_CATALOGUE_TURNSTILE_SECRET_KEY: "f".repeat(32),
+};
+test("hosted authentication bindings are required before deployment mutations", () => {
+  assert.deepEqual(authDeploymentSecrets(authEnvironment), {
+    AUTH_RATE_LIMIT_SECRET: authEnvironment.TECHABANCA_CATALOGUE_AUTH_RATE_LIMIT_SECRET,
+    TURNSTILE_SITE_KEY: authEnvironment.TECHABANCA_CATALOGUE_TURNSTILE_SITE_KEY,
+    TURNSTILE_SECRET_KEY: authEnvironment.TECHABANCA_CATALOGUE_TURNSTILE_SECRET_KEY,
+  });
+});
+for (const key of Object.keys(authEnvironment)) test("hosted deployment rejects missing " + key, () => {
+  assert.throws(() => authDeploymentSecrets({ ...authEnvironment, [key]: undefined }), /authentication configuration/);
+});
+test("deployment rejects test challenge keys and sanitizes invalid configuration errors", () => {
+  assert.throws(() => authDeploymentSecrets({ ...authEnvironment, TECHABANCA_CATALOGUE_TURNSTILE_SITE_KEY: "1x00000000000000000000AA" }), /authentication configuration/);
+  try { authDeploymentSecrets({ ...authEnvironment, TECHABANCA_CATALOGUE_TURNSTILE_SECRET_KEY: "PRIVATE" }); assert.fail("expected rejection"); }
+  catch (error) { assert(!error.message.includes("PRIVATE")); }
+});
+test("deployment refuses oversized security secrets", () => {
+  assert.throws(() => authDeploymentSecrets({ ...authEnvironment, TECHABANCA_CATALOGUE_TURNSTILE_SECRET_KEY: "x".repeat(201) }), /authentication configuration/);
+});

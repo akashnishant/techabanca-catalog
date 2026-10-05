@@ -14,6 +14,7 @@ const REGISTRATION_PASSWORD =
 
 async function resetFixture() {
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM auth_attempt_windows"),
     env.DB.prepare("DELETE FROM business_profiles"),
     env.DB.prepare("DELETE FROM organization_members"),
     env.DB.prepare("DELETE FROM sessions"),

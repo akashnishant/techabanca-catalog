@@ -1,3 +1,4 @@
+import { parseStrictJson } from "@techabanca/domain";
 import { createPublicId, hasSubscriptionAccess, subscriptionAccessSql, TRIAL_DAYS, webhookSignatureValid,
   type SubscriptionStatus, type SubscriptionView, type TenantContext } from "@techabanca/domain";
 import type { CatalogueAppEnv } from "../app-env";
@@ -60,7 +61,7 @@ export async function subscriptionInput(request: Request, keys: string[]) {
   if (!/^application\/json(?:\s*;|$)/i.test(request.headers.get("content-type") ?? "")) throw invalid();
   const bytes = await subscriptionRequestBytes(request);
   let body: Record<string, unknown>;
-  try { body = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)); } catch { throw invalid(); }
+  try { body = parseStrictJson(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)) as Record<string, unknown>; } catch { throw invalid(); }
   if (!body || typeof body !== "object" || Array.isArray(body) || Object.keys(body).sort().join(",") !== [...keys].sort().join(",")) throw invalid();
   return body;
 }
@@ -220,7 +221,7 @@ export class SubscriptionService {
     const eventId = request.headers.get("X-Razorpay-Event-Id");
     if (!eventId || !/^[a-zA-Z0-9_-]{1,255}$/.test(eventId)) throw invalid();
     let event: { account_id: string; event: string; created_at: number; payload?: { subscription?: { entity?: Record<string, unknown> }; payment?: { entity?: Record<string, unknown> } } };
-    try { event = JSON.parse(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)); } catch { throw invalid(); }
+    try { event = parseStrictJson(new TextDecoder("utf-8", { fatal: true, ignoreBOM: false }).decode(bytes)) as typeof event; } catch { throw invalid(); }
     if (!event || event.account_id !== config.account || typeof event.event !== "string" || !/^[a-z.]{1,160}$/.test(event.event)
       || !Number.isSafeInteger(event.created_at) || event.created_at <= 0 || event.created_at > Math.floor(date.getTime() / 1000) + 300) throw invalid();
     const hash = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", Uint8Array.from(bytes))), n => n.toString(16).padStart(2, "0")).join("");

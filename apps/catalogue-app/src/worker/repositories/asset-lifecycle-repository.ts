@@ -104,8 +104,24 @@ const assetColumns = `
   updated_at
 `;
 
+export type AssetActor = { userId: number; sessionId: number };
+export class AssetActorUnavailable extends Error {}
 export class AssetLifecycleRepository {
-  constructor(private readonly db: D1Database) {}
+  constructor(private readonly db: D1Database, private readonly actor?: AssetActor) {
+    if (actor && (![actor.userId, actor.sessionId].every(n => Number.isSafeInteger(n) && n > 0))) throw new AssetActorUnavailable();
+  }
+  private gate(tenant: TenantContext, mutation: boolean): string {
+    if (!this.actor) return "1=1"; // Trusted internal lifecycle callers have no HTTP session.
+    if (!Number.isSafeInteger(tenant.organizationId) || tenant.organizationId <= 0) throw new AssetActorUnavailable();
+    return "EXISTS (SELECT 1 FROM organization_members m JOIN users u ON u.id=m.user_id JOIN organizations o ON o.id=m.organization_id "
+      + "JOIN sessions s ON s.user_id=u.id WHERE m.organization_id=" + tenant.organizationId + " AND m.user_id=" + this.actor.userId
+      + " AND s.id=" + this.actor.sessionId + " AND m.status='active' " + (mutation ? "AND m.role IN ('owner','admin') " : "")
+      + "AND u.status='active' AND u.deleted_at IS NULL AND o.status='active' AND o.deleted_at IS NULL "
+      + "AND s.revoked_at IS NULL AND s.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
+  }
+  async ensureAccess(tenant: TenantContext, mutation = false): Promise<void> {
+    if (this.actor && !await this.db.prepare("SELECT 1 AS allowed WHERE " + this.gate(tenant, mutation)).first()) throw new AssetActorUnavailable();
+  }
 
   async findByPublicId(
     tenant: TenantContext,
@@ -117,6 +133,7 @@ export class AssetLifecycleRepository {
          FROM assets
          WHERE organization_id = ?
            AND public_id = ?
+           AND ${this.gate(tenant, false)}
          LIMIT 1`,
       )
       .bind(tenant.organizationId, assetPublicId)
@@ -155,7 +172,7 @@ export class AssetLifecycleRepository {
            updated_at,
            upload_expires_at,
            version
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 1)`,
+         ) SELECT ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, 1 WHERE ${this.gate(tenant, true)}`,
       )
       .bind(
         input.publicId,
@@ -174,6 +191,7 @@ export class AssetLifecycleRepository {
 
     const created = await this.findByPublicId(tenant, input.publicId);
     if (!created) {
+      await this.ensureAccess(tenant, true);
       throw new Error("asset_pending_insert_not_found");
     }
 
@@ -213,7 +231,8 @@ export class AssetLifecycleRepository {
            AND public_id = ?
            AND status = 'pending'
            AND deleted_at IS NULL
-           AND version = ?`,
+           AND version = ?
+           AND ${this.gate(tenant, true)}`,
       )
       .bind(
         input.byteSize,
@@ -231,6 +250,7 @@ export class AssetLifecycleRepository {
       .run();
 
     if ((result.meta.changes ?? 0) === 0) {
+      await this.ensureAccess(tenant, true);
       return null;
     }
 
@@ -258,7 +278,8 @@ export class AssetLifecycleRepository {
            AND public_id = ?
            AND status = 'pending'
            AND deleted_at IS NULL
-           AND version = ?`,
+           AND version = ?
+           AND ${this.gate(tenant, true)}`,
       )
       .bind(
         input.failureCode,
@@ -270,6 +291,7 @@ export class AssetLifecycleRepository {
       .run();
 
     if ((result.meta.changes ?? 0) === 0) {
+      await this.ensureAccess(tenant, true);
       return null;
     }
 
@@ -296,7 +318,8 @@ export class AssetLifecycleRepository {
            AND public_id = ?
            AND status IN ('pending', 'ready', 'failed')
            AND deleted_at IS NULL
-           AND version = ?`,
+           AND version = ?
+           AND ${this.gate(tenant, true)}`,
       )
       .bind(
         input.now,
@@ -308,6 +331,7 @@ export class AssetLifecycleRepository {
       .run();
 
     if ((result.meta.changes ?? 0) === 0) {
+      await this.ensureAccess(tenant, true);
       return null;
     }
 

@@ -12,7 +12,8 @@ function normalizedOrigin(
   value: string,
 ): string | null {
   try {
-    return new URL(value).origin;
+    const url = new URL(value);
+    return url.origin;
   } catch {
     return null;
   }
@@ -38,6 +39,7 @@ export const requireSameOrigin =
 
         if (
           !origin
+          || origin !== originHeader
           || origin !== requestOrigin
         ) {
           return apiError(
@@ -76,8 +78,9 @@ export const requireSameOrigin =
           ?.toLowerCase();
 
       if (
-        fetchSite === "cross-site"
-        || fetchSite === "same-site"
+        fetchSite !== undefined
+        && fetchSite !== "same-origin"
+        && fetchSite !== "none"
       ) {
         return apiError(
           c,

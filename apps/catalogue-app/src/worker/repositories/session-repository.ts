@@ -34,7 +34,7 @@ export class SessionRepository {
   constructor(private readonly db: D1Database) {}
 
   async create(input: CreateSessionInput): Promise<void> {
-    await this.db
+    const result = await this.db
       .prepare(
         `INSERT INTO sessions (
            public_id,
@@ -42,7 +42,7 @@ export class SessionRepository {
            token_hash,
            expires_at,
            created_at
-         ) VALUES (?, ?, ?, ?, ?)`,
+         ) SELECT ?, ?, ?, ?, ? FROM users WHERE id = ? AND status = 'active' AND deleted_at IS NULL`,
       )
       .bind(
         input.publicId,
@@ -50,8 +50,10 @@ export class SessionRepository {
         input.tokenHash,
         input.expiresAt,
         input.createdAt,
+        input.userId,
       )
       .run();
+    if (result.meta.changes !== 1) throw new Error("session_user_unavailable");
   }
 
   async findAuthenticatedByTokenHash(

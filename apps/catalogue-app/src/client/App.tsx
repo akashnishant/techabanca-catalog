@@ -10,6 +10,7 @@ import {
   type AuthOrganization,
   type AuthUser,
 } from "./auth-api";
+import { AuthChallenge } from "./AuthChallenge";
 import { AdminConsole } from "./AdminConsole";
 import { adminApi } from "./admin-api";
 import { AuthoringWorkspace } from "./AuthoringWorkspace";
@@ -305,6 +306,19 @@ function AuthScreen({
   const [error, setError] =
     useState<string | null>(null);
 
+  const [security, setSecurity] = useState<{ enabled: boolean; siteKey: string | null } | null>(null);
+  const [securityFailed, setSecurityFailed] = useState(false);
+  const [challengeToken, setChallengeToken] = useState<string | null>(null);
+  const [challengeGeneration, setChallengeGeneration] = useState(0);
+  const challengeError = useCallback((message: string) => setError(message), []);
+  const loadSecurity = useCallback(async () => {
+    setSecurityFailed(false);
+    setSecurity(null);
+    try { setSecurity(await authApi.security()); setError(null); }
+    catch { setSecurityFailed(true); setError("Sign in is temporarily unavailable. Please retry."); }
+  }, []);
+  useEffect(() => { void loadSecurity(); }, [loadSecurity]);
+
   function patch(
     key: keyof FormState,
     value: string,
@@ -319,6 +333,7 @@ function AuthScreen({
     nextMode: AuthMode,
   ) {
     setMode(nextMode);
+    setChallengeToken(null);
     setError(null);
     setForm(EMPTY_FORM);
   }
@@ -328,6 +343,10 @@ function AuthScreen({
   ) {
     event.preventDefault();
     setError(null);
+    if (!security || (security.enabled && !challengeToken)) {
+      setError("Complete the security check before continuing.");
+      return;
+    }
 
     if (
       mode === "register"
@@ -357,6 +376,7 @@ function AuthScreen({
         await authApi.login({
           email: form.email,
           password: form.password,
+          ...(challengeToken ? { turnstileToken: challengeToken } : {}),
         });
       } else {
         await authApi.register({
@@ -366,6 +386,7 @@ function AuthScreen({
             form.displayName,
           organizationName:
             form.organizationName,
+          ...(challengeToken ? { turnstileToken: challengeToken } : {}),
         });
       }
 
@@ -376,6 +397,8 @@ function AuthScreen({
       );
     } finally {
       setBusy(false);
+      setChallengeToken(null);
+      setChallengeGeneration(current => current + 1);
     }
   }
 
@@ -574,6 +597,11 @@ function AuthScreen({
                   />
                 )}
 
+                {security?.enabled && security.siteKey && <AuthChallenge siteKey={security.siteKey} action={mode} generation={challengeGeneration} onToken={setChallengeToken} onError={challengeError} />}
+                {!security && !securityFailed && <p role="status" className="text-sm text-[#68757b]">Preparing secure sign in...</p>}
+                {securityFailed && <button type="button" onClick={() => void loadSecurity()} className="text-sm font-semibold underline">Retry sign in setup</button>}
+                {security?.enabled && <button type="button" disabled={busy} onClick={() => { setError(null); setChallengeToken(null); setChallengeGeneration(current => current + 1); }} className="text-sm font-semibold underline">Retry security check</button>}
+
                 {error && (
                   <div
                     role="alert"
@@ -586,7 +614,7 @@ function AuthScreen({
 
                 <button
                   type="submit"
-                  disabled={busy}
+                  disabled={busy || !security || (security.enabled && !challengeToken)}
                   className="flex h-12 w-full items-center justify-center rounded-xl bg-[#0b1519] px-5 text-sm font-bold text-white transition hover:bg-[#142329] focus:outline-none focus-visible:ring-4 focus-visible:ring-[#BAF16D]/45 disabled:cursor-wait disabled:opacity-60"
                 >
                   {busy

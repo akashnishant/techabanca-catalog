@@ -1,3 +1,4 @@
+import { readRequestJson } from "../http/request-json";
 import { Hono } from "hono";
 import type { CatalogueAppEnv } from "../app-env";
 import {
@@ -377,7 +378,7 @@ export function createCategoryRoutes() {
       let body: unknown;
 
       try {
-        body = await c.req.json();
+        body = await readRequestJson(c.req.raw);
       } catch {
         return apiError(
           c,
@@ -444,7 +445,7 @@ export function createCategoryRoutes() {
       let body: unknown;
 
       try {
-        body = await c.req.json();
+        body = await readRequestJson(c.req.raw);
       } catch {
         return apiError(
           c,
@@ -509,7 +510,7 @@ export function createCategoryRoutes() {
       let body: unknown;
 
       try {
-        body = await c.req.json();
+        body = await readRequestJson(c.req.raw);
       } catch {
         return apiError(
           c,

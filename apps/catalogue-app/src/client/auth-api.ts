@@ -158,9 +158,14 @@ export function createAuthApi(
       }
     },
 
+    security() {
+      return request<{ enabled: boolean; siteKey: string | null }>("/api/v1/auth/security");
+    },
+
     login(input: {
       email: string;
       password: string;
+      turnstileToken?: string;
     }) {
       return postJson<SessionData>(
         "/api/v1/auth/login",
@@ -173,6 +178,7 @@ export function createAuthApi(
       password: string;
       displayName: string;
       organizationName: string;
+      turnstileToken?: string;
     }) {
       return postJson<RegistrationData>(
         "/api/v1/auth/register",

@@ -20,7 +20,11 @@ import { createAnalyticsRoutes } from "./routes/analytics-routes";
 import { purgeExpiredAnalytics } from "./services/analytics-service";
 import { createAdminRoutes } from "./routes/admin-routes";
 import { purgeModerationWindows } from "./services/admin-service";
+import { securityHeaders } from "./middleware/security-headers";
+import { requestBodySecurity } from "./middleware/request-body-security";
+import { purgeAuthWindows } from "./services/auth-abuse-service";
 const app = new Hono<CatalogueAppEnv>();
+app.use("*", securityHeaders);
 app.use("*", async (c, next) => {
   c.header("X-Robots-Tag", "noindex, nofollow");
   const deployment = readCatalogueDeployment(c.env.DEPLOYMENT_ENVIRONMENT);
@@ -40,6 +44,7 @@ app.use("/api/*", secureHeaders());
 app.use("/api/v1/auth/*", requireSameOrigin);
 app.use("/api/v1/onboarding/*", requireSameOrigin);
 app.use("/api/v1/catalogue/*", requireSameOrigin);
+app.use("/api/*", requestBodySecurity);
 app.get("/robots.txt", c => c.text("User-agent: *\nDisallow: /\n"));
 app.get("/api/health", c => c.json({ status: "ok", service: "techabanca-catalogue-app" }));
 app.route("/api/v1/admin", createAdminRoutes());
@@ -66,6 +71,7 @@ app.notFound(async c => {
 export default Object.assign(app, {
   async scheduled(controller: ScheduledController, env: CatalogueAppEnv["Bindings"]) {
     if (controller.cron !== "0 3 * * *" || readCatalogueDeployment(env.DEPLOYMENT_ENVIRONMENT) === null) return;
+    await purgeAuthWindows(env.DB);
     await purgeModerationWindows(env.DB);
     const cleanup = await purgeExpiredEnquiries(env.DB);
     const analyticsCleanup = await purgeExpiredAnalytics(env.DB);
