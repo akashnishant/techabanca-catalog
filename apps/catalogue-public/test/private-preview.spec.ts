@@ -23,6 +23,18 @@ async function get(f:Fixture,path="/", options:RequestInit={},bindings:Record<st
  return app.fetch(new Request(f.origin+f.prefix+path,options),{...env,PUBLICATION_PREVIEW_SECRET:secret,...bindings});
 }
 describe("signed private publication previews",()=>{
+ it("keeps preview files uncached and ignores matching browser validators",async()=>{
+  const f=await previewFixture(),path="/media/"+f.previewPublicationId+"/"+f.imageId;
+  const first=await get(f,path),etag=first.headers.get("ETag")!;
+  expect(first.headers.get("Cache-Control")).toBe("no-store");
+  const repeated=await get(f,path,{headers:{"If-None-Match":etag}});
+  expect(repeated.status).toBe(200);expect(repeated.headers.get("Cache-Control")).toBe("no-store");
+  expect((await repeated.arrayBuffer()).byteLength).toBeGreaterThan(0);
+  await env.DB.prepare("UPDATE catalogue_publications SET preview_revoked_at=? WHERE id=?").bind(new Date().toISOString(),f.numericId).run();
+  const revoked=await get(f,path,{headers:{"If-None-Match":etag}});
+  expect(revoked.status).toBe(404);expect(revoked.headers.get("Cache-Control")).toBe("no-store");
+ });
+
  it("excludes reporting and rejects report submission from private previews",async()=>{const f=await previewFixture();expect(await(await get(f)).text()).not.toContain("Report this catalogue");expect((await get(f,"/report")).status).toBe(404);expect((await get(f,"/report",{method:"POST",body:"summary=private"})).status).toBe(405);});
  it("blocks private previews of suspended source catalogues even without a route",async()=>{const f=await previewFixture();await env.DB.prepare("DELETE FROM public_catalogue_routes WHERE slug=?").bind(f.slug).run();await env.DB.prepare("UPDATE catalogues SET status='suspended' WHERE id=?").bind(f.n).run();expect((await get(f)).status).toBe(404);});
  it("blocks private previews after organization suspension",async()=>{const f=await previewFixture();await env.DB.prepare("UPDATE organizations SET status='suspended' WHERE id=?").bind(f.n).run();expect((await get(f)).status).toBe(404);});

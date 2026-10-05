@@ -1,5 +1,6 @@
 import {
   type FormEvent,
+  lazy,
   useCallback,
   useEffect,
   useState,
@@ -11,9 +12,10 @@ import {
   type AuthUser,
 } from "./auth-api";
 import { AuthChallenge } from "./AuthChallenge";
-import { AdminConsole } from "./AdminConsole";
+import { DeferredSection } from "./DeferredSection";
+const AdminConsole = lazy(() => import("./AdminConsole").then(module => ({ default: module.AdminConsole })));
 import { adminApi } from "./admin-api";
-import { AuthoringWorkspace } from "./AuthoringWorkspace";
+const AuthoringWorkspace = lazy(() => import("./AuthoringWorkspace").then(module => ({ default: module.AuthoringWorkspace })));
 import {
   OnboardingApiError,
   onboardingApi,
@@ -1171,7 +1173,7 @@ function Workspace({
     && workspaceOpen
   ) {
     return (
-      <AuthoringWorkspace
+      <DeferredSection label="workspace"><AuthoringWorkspace
         brandLight={<Brand />}
         brandDark={<Brand variant="dark" />}
         user={state.user}
@@ -1215,7 +1217,7 @@ function Workspace({
         }}
         onLogout={logout}
         loggingOut={loggingOut}
-      />
+      /></DeferredSection>
     );
   }
 
@@ -2575,7 +2577,7 @@ export function App() {
   }
 
   if (authenticated) {
-    if(adminOpen)return <AdminConsole brand={<Brand/>} user={authenticated.user.displayName} onLogout={logout}/>;
+    if(adminOpen)return <DeferredSection label="administration"><AdminConsole brand={<Brand/>} user={authenticated.user.displayName} onLogout={logout}/></DeferredSection>;
     return (
       <>
       {authenticated.platformAdmin&&<div className="flex justify-end border-b border-[#dfe5dc] bg-[#f1f7e9] px-5 py-2 text-xs font-semibold"><a href="#admin" className="rounded px-3 py-1 text-[#46622b] underline">Platform administration</a></div>}

@@ -287,7 +287,8 @@ async function main(action) {
     const hash = sourceHash();
     npm(["run", "verify"], { CLOUDFLARE_ENV: "" });
     assert.equal(sourceHash(), hash, "Source changed during verification");
-    await build({ verified: true }); return;
+    await build({ verified: true });
+    npm(["run", "performance:verify", "--", "--staging"]); return;
   }
   if (action === "provision") { provision(); return; }
   if (action === "deploy") { await deploy(); return; }

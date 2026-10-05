@@ -17,7 +17,7 @@ function safeFilename(label: string | null): string {
   const name = (label?.trim() || "Document").replace(/[\u0000-\u001f\u007f/\\]/g, "-").slice(0, 140);
   return /\.pdf$/i.test(name) ? name : name + ".pdf";
 }
-export async function serveMedia(request: Request, bucket: R2Bucket, media: Media): Promise<Response> {
+export async function serveMedia(request: Request, bucket: R2Bucket, media: Media, preview = false): Promise<Response> {
   const head = await bucket.head(media.object_key);
   if (!head || !head.size) return new Response("File unavailable.", { status: 404 });
   const mime = media.mime_type || head.httpMetadata?.contentType || "";
@@ -26,7 +26,7 @@ export async function serveMedia(request: Request, bucket: R2Bucket, media: Medi
   }
   const headers = new Headers({
     "Content-Type": mime, "Content-Length": String(head.size), "ETag": head.httpEtag,
-    "Last-Modified": head.uploaded.toUTCString(), "Accept-Ranges": "bytes", "Cache-Control": "no-store",
+    "Last-Modified": head.uploaded.toUTCString(), "Accept-Ranges": "bytes", "Cache-Control": preview ? "no-store" : "private, no-cache, must-revalidate",
     "X-Content-Type-Options": "nosniff",
   });
   if (media.kind === "document") {
@@ -35,7 +35,7 @@ export async function serveMedia(request: Request, bucket: R2Bucket, media: Medi
     headers.set("Content-Disposition", 'attachment; filename="' + ascii + '"; filename*=UTF-8\'\'' + encodeURIComponent(filename).replace(/['()*]/g, c => "%" + c.charCodeAt(0).toString(16).toUpperCase()));
   } else headers.set("Content-Disposition", "inline");
   const noneMatch = request.headers.get("If-None-Match");
-  if (noneMatch?.split(",").some(value => value.trim() === "*" || value.trim().replace(/^W\//, "") === head.httpEtag)) {
+  if (!preview && noneMatch?.split(",").some(value => value.trim() === "*" || value.trim().replace(/^W\//, "") === head.httpEtag)) {
     headers.delete("Content-Length"); return new Response(null, { status: 304, headers });
   }
   if (request.method === "HEAD") return new Response(null, { headers });

@@ -10,7 +10,7 @@ export function analyticsStatement(env: PublicBindings, site: Site, point: Analy
     JOIN catalogues c ON c.public_id = pc.catalogue_public_id JOIN organizations o ON o.id = c.organization_id
     WHERE r.slug = ? AND r.status = 'active' AND p.state = 'active' AND p.public_id = ?
       AND pc.catalogue_public_id = r.catalogue_public_id AND p.catalogue_public_id = r.catalogue_public_id AND pc.slug = r.slug
-      AND c.deleted_at IS NULL AND o.deleted_at IS NULL AND o.status = 'active'
+      AND c.deleted_at IS NULL AND c.status NOT IN ('suspended','archived') AND o.deleted_at IS NULL AND o.status = 'active'
       AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = r.slug)
       AND ${publicSubscriptionSql(env.DEPLOYMENT_ENVIRONMENT === "local")}
       AND (? = '' OR EXISTS (SELECT 1 FROM published_items i WHERE i.publication_id = p.id AND i.item_public_id = ?))
@@ -22,6 +22,13 @@ export function emitAnalytics(env: PublicBindings, site: Site, point: AnalyticsP
   try { env.CATALOGUE_ANALYTICS?.writeDataPoint({ indexes: [site.catalogue_public_id],
     blobs: ["v1", point.event, site.publication_public_id, point.itemId ?? ""], doubles: [1] }); }
   catch { /* Optional telemetry must never prevent catalogue or enquiry access. */ }
+}
+export async function scheduleAnalytics(env: PublicBindings, site: Site, request: Request, preview: boolean, points: AnalyticsPoint[],
+  execution?: Pick<ExecutionContext, "waitUntil">): Promise<void> {
+  if (!analyticsEligible(request, preview) || !points.length) return;
+  const task = recordAnalytics(env, site, request, preview, points);
+  if (execution) execution.waitUntil(task);
+  else await task;
 }
 export async function recordAnalytics(env: PublicBindings, site: Site, request: Request, preview: boolean, points: AnalyticsPoint[]) {
   if (!analyticsEligible(request, preview)) return;

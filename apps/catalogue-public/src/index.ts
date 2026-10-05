@@ -7,9 +7,10 @@ import { FilterError, readFilters, resolveHost } from "./routing";
 import { about, catalogue, contact, home, itemDetail, unavailable, contactLinks } from "./render";
 import { serveMedia } from "./media";
 import { faviconSvg } from "./brand";
+import { staticAsset } from "./static-assets";
 import { captureEnquiry, EnquiryCaptureError, enquiryInput, readEnquiryForm, validateFormToken } from "./enquiry-capture";
 
-import { recordAnalytics, emitAnalytics, type AnalyticsPoint } from "./analytics";
+import { scheduleAnalytics, emitAnalytics, type AnalyticsPoint } from "./analytics";
 
 import { signReportToken } from "@techabanca/domain";
 import { captureReport, readReportForm, reportClaims, ReportError } from "./report-capture";
@@ -44,16 +45,13 @@ app.use("*", async (c, next) => {
   c.header("Referrer-Policy", privatePreview || url.pathname === "/go/whatsapp" ? "no-referrer" : "strict-origin-when-cross-origin");
   c.header("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
-  c.header("Cache-Control", "no-store");
+  if (privatePreview || !c.res.headers.has("Cache-Control")) c.header("Cache-Control", "no-store");
 });
 app.get("/health", c => c.json({ status: "ok", service: "techabanca-catalogue-public" }));
-app.get("/favicon.svg", c => {
-  c.header("Content-Type", "image/svg+xml; charset=utf-8");
-  return c.body(faviconSvg);
-});
+app.get("/favicon.svg", c => staticAsset(c.req.raw, "favicon", faviconSvg, "image/svg+xml; charset=utf-8"));
 app.get("/theme.css", c => {
-  c.header("Content-Type", "text/css; charset=utf-8");
-  return c.body(publicThemeCss(c.req.query("theme") ?? "professional"));
+  const theme = c.req.query("theme") === "modern" ? "modern" : "professional";
+  return staticAsset(c.req.raw, "theme:" + theme, publicThemeCss(theme), "text/css; charset=utf-8");
 });
 function html(request: Request, body: string, status = 200, extraHeaders: Record<string, string> = {}): Response {
   return new Response(request.method === "HEAD" ? null : body, { status, headers: { "Content-Type": "text/html; charset=utf-8", ...extraHeaders, ...(status === 405 ? { Allow: "GET, HEAD" } : {}) } });
@@ -96,7 +94,7 @@ app.all("*", async c => {
     if (mediaMatch[1] !== site.publication_public_id || !hasPublicIdPrefix(mediaMatch[2], "ast")) return html(request, unavailable(), 404);
     const media = await repository.media(site, mediaMatch[2]);
     if (!media) return html(request, unavailable(), 404);
-    return serveMedia(request, c.env.ASSETS, media);
+    return serveMedia(request, c.env.ASSETS, media, !!preview);
   }
   if (path === "/robots.txt") {
     c.header("Content-Type", "text/plain; charset=utf-8");
@@ -124,7 +122,9 @@ app.all("*", async c => {
     }
     return html(request,reportPage(site,host,{token:await token()}),secret?200:503);
   }
-  const track = (points: AnalyticsPoint[]) => recordAnalytics(c.env, site, request, !!preview, points);
+  let execution: Pick<ExecutionContext, "waitUntil"> | undefined;
+  try { execution = c.executionCtx; } catch { /* Direct in-process callers have no Worker lifetime. */ }
+  const track = (points: AnalyticsPoint[]) => scheduleAnalytics(c.env, site, request, !!preview, points, execution);
   if (path === "/go/whatsapp" && !preview) {
     if ([...url.searchParams.keys()].some(key => key !== "item") || url.searchParams.getAll("item").length > 1) return html(request, unavailable(), 400);
     const slug = url.searchParams.get("item");
@@ -135,11 +135,13 @@ app.all("*", async c => {
     await track([{ event: "whatsapp_click", itemId: detail?.item.item_public_id }]);
     return new Response(null, { status: 302, headers: { Location: target, "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } });
   }
-  const categories = await repository.categories(site);
   if (path === "/") {
-    const featured = site.show_featured_items === 1 ? await repository.items(site, { query: "", type: "all", category: "", page: 1, featured: true }, null, 6) : { items: [] };
+    const [categories, featured] = await Promise.all([
+      site.show_categories === 1 ? repository.categories(site) : Promise.resolve([]),
+      site.show_featured_items === 1 ? repository.featuredItems(site) : Promise.resolve([]),
+    ]);
     await track([{ event: "catalogue_view" }]);
-    return html(request, home(site, host, categories, featured.items));
+    return html(request, home(site, host, categories, featured));
   }
   if (path === "/about" && site.show_about === 1) { await track([{ event: "catalogue_view" }]); return html(request, about(site, host)); }
   if (path === "/contact" && site.show_contact === 1) {
@@ -203,7 +205,10 @@ app.all("*", async c => {
   if (itemMatch) {
     let slug: string;
     try { slug = decodeURIComponent(itemMatch[1]); } catch { slug = ""; }
-    const detail = isValidItemSlug(slug) ? await repository.detail(site, slug) : null;
+    const [detail, categories] = await Promise.all([
+      isValidItemSlug(slug) ? repository.detail(site, slug) : Promise.resolve(null),
+      site.show_categories === 1 ? repository.categories(site) : Promise.resolve([]),
+    ]);
     if (!detail) return html(request, unavailable("Item not found", "This item is not available in this catalogue.", site, host, path), 404);
     await track([{ event: "catalogue_view" }, { event: "item_view", itemId: detail.item.item_public_id }]);
     return html(request, itemDetail(site, host, categories, detail));
@@ -212,6 +217,7 @@ app.all("*", async c => {
   if (path === "/catalogue" || (categoryMatch && site.show_categories === 1)) {
     try {
       const filters = readFilters(url);
+      const categories = site.show_categories === 1 ? await repository.categories(site) : [];
       if (categoryMatch) { try { filters.category = decodeURIComponent(categoryMatch[1]); } catch { throw new FilterError("Check the category address and try again."); } }
       if (filters.category && site.show_categories !== 1) throw new FilterError("Category filtering is unavailable.");
       const category = filters.category ? categories.find(category => category.slug === filters.category) : undefined;

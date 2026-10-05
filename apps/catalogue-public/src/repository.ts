@@ -40,6 +40,10 @@ export class PublicRepository {
     ]);
     return { total: (results[0].results[0] as { total: number }).total, items: results[1].results as Item[], page: filters.page, pageSize };
   }
+  async featuredItems(site: Site): Promise<Item[]> {
+    return (await this.db.prepare(itemSelect + " WHERE i.publication_id = ? AND i.is_featured = 1 ORDER BY i.sort_order, i.name, i.item_public_id LIMIT 6")
+      .bind(site.publication_id).all<Item>()).results;
+  }
   async detail(site: Site, slug: string): Promise<Detail | null> {
     const item = await this.db.prepare(itemSelect + " WHERE i.publication_id = ? AND i.slug = ?")
       .bind(site.publication_id, slug).first<Item>();

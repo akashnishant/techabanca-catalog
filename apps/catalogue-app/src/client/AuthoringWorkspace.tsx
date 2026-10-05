@@ -1,5 +1,6 @@
 import {
   type ReactNode,
+  lazy,
   useCallback,
   useEffect,
   useMemo,
@@ -16,14 +17,15 @@ import {
   type AuthoringCategory,
   type AuthoringItem,
 } from "./authoring-api";
-import { CategoriesManager } from "./CategoriesManager";
-import { CatalogueManager } from "./CatalogueManager";
-import { EnquiriesWorkspace } from "./EnquiriesWorkspace";
-import { WebsiteWorkspace } from "./WebsiteWorkspace";
-import { SharingWorkspace } from "./SharingWorkspace";
-import { AnalyticsWorkspace } from "./AnalyticsWorkspace";
-import { SubscriptionWorkspace } from "./SubscriptionWorkspace";
+const CategoriesManager = lazy(() => import("./CategoriesManager").then(module => ({ default: module.CategoriesManager })));
+const CatalogueManager = lazy(() => import("./CatalogueManager").then(module => ({ default: module.CatalogueManager })));
+const EnquiriesWorkspace = lazy(() => import("./EnquiriesWorkspace").then(module => ({ default: module.EnquiriesWorkspace })));
+const WebsiteWorkspace = lazy(() => import("./WebsiteWorkspace").then(module => ({ default: module.WebsiteWorkspace })));
+const SharingWorkspace = lazy(() => import("./SharingWorkspace").then(module => ({ default: module.SharingWorkspace })));
+const AnalyticsWorkspace = lazy(() => import("./AnalyticsWorkspace").then(module => ({ default: module.AnalyticsWorkspace })));
+const SubscriptionWorkspace = lazy(() => import("./SubscriptionWorkspace").then(module => ({ default: module.SubscriptionWorkspace })));
 import type { CatalogueMode } from "./onboarding-api";
+import { DeferredSection } from "./DeferredSection";
 
 type WorkspaceView =
   | "home"
@@ -1137,7 +1139,7 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "catalogue" && snapshot && (
-                <CatalogueManager
+                <DeferredSection label="catalogue"><CatalogueManager
                   organizationId={
                     selectedOrganization.id
                   }
@@ -1159,11 +1161,11 @@ export function AuthoringWorkspace({
                   onWorkspaceRefresh={() =>
                     loadSnapshot(true)
                   }
-                />
+                /></DeferredSection>
               )}
 
               {activeView === "categories" && snapshot && (
-                <CategoriesManager
+                <DeferredSection label="categories"><CategoriesManager
                   organizationId={
                     selectedOrganization.id
                   }
@@ -1179,25 +1181,25 @@ export function AuthoringWorkspace({
                   onRefresh={() =>
                     loadSnapshot(true)
                   }
-                />
+                /></DeferredSection>
               )}
 
               {activeView === "enquiries" && (
-                <EnquiriesWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} canManage={selectedOrganization.role === "owner" || selectedOrganization.role === "admin"} />
+                <DeferredSection label="enquiries"><EnquiriesWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} canManage={selectedOrganization.role === "owner" || selectedOrganization.role === "admin"} /></DeferredSection>
               )}
 
               {activeView === "website" && (
-                <WebsiteWorkspace key={selectedOrganization.id}
+                <DeferredSection label="website"><WebsiteWorkspace key={selectedOrganization.id}
                   organizationId={selectedOrganization.id}
-                  canManage={selectedOrganization.role === "owner" || selectedOrganization.role === "admin"} />
+                  canManage={selectedOrganization.role === "owner" || selectedOrganization.role === "admin"} /></DeferredSection>
               )}
 
               {activeView === "analytics" && (
-                <AnalyticsWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} />
+                <DeferredSection label="analytics"><AnalyticsWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} /></DeferredSection>
               )}
 
               {activeView === "share" && (
-                <SharingWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} />
+                <DeferredSection label="sharing"><SharingWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} /></DeferredSection>
               )}
 
               {activeView === "business" && (
@@ -1222,7 +1224,7 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "subscription" && (
-                <SubscriptionWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} />
+                <DeferredSection label="subscription"><SubscriptionWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} /></DeferredSection>
               )}
 
               {activeView === "settings" && (
