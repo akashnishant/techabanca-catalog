@@ -18,6 +18,8 @@ import { createSubscriptionRoutes, createPaymentWebhookRoutes } from "./routes/s
 import { createSharingRoutes } from "./routes/sharing-routes";
 import { createAnalyticsRoutes } from "./routes/analytics-routes";
 import { purgeExpiredAnalytics } from "./services/analytics-service";
+import { createAdminRoutes } from "./routes/admin-routes";
+import { purgeModerationWindows } from "./services/admin-service";
 const app = new Hono<CatalogueAppEnv>();
 app.use("*", async (c, next) => {
   c.header("X-Robots-Tag", "noindex, nofollow");
@@ -40,6 +42,7 @@ app.use("/api/v1/onboarding/*", requireSameOrigin);
 app.use("/api/v1/catalogue/*", requireSameOrigin);
 app.get("/robots.txt", c => c.text("User-agent: *\nDisallow: /\n"));
 app.get("/api/health", c => c.json({ status: "ok", service: "techabanca-catalogue-app" }));
+app.route("/api/v1/admin", createAdminRoutes());
 app.route("/api/v1/auth", createAuthRoutes());
 app.route("/api/v1/auth", createTenantAccessRoutes());
 app.route("/api/v1/onboarding", createOnboardingRoutes());
@@ -63,6 +66,7 @@ app.notFound(async c => {
 export default Object.assign(app, {
   async scheduled(controller: ScheduledController, env: CatalogueAppEnv["Bindings"]) {
     if (controller.cron !== "0 3 * * *" || readCatalogueDeployment(env.DEPLOYMENT_ENVIRONMENT) === null) return;
+    await purgeModerationWindows(env.DB);
     const cleanup = await purgeExpiredEnquiries(env.DB);
     const analyticsCleanup = await purgeExpiredAnalytics(env.DB);
     if (analyticsCleanup.hasMore) throw new Error("analytics_retention_backlog");

@@ -10,6 +10,8 @@ import {
   type AuthOrganization,
   type AuthUser,
 } from "./auth-api";
+import { AdminConsole } from "./AdminConsole";
+import { adminApi } from "./admin-api";
 import { AuthoringWorkspace } from "./AuthoringWorkspace";
 import {
   OnboardingApiError,
@@ -24,6 +26,7 @@ type AuthMode = "login" | "register";
 type AuthenticatedState = {
   user: AuthUser;
   organizations: AuthOrganization[];
+  platformAdmin: boolean;
 };
 
 type FormState = {
@@ -2479,6 +2482,8 @@ function Workspace({
 }
 
 export function App() {
+  const [adminOpen,setAdminOpen]=useState(()=>window.location.hash==="#admin");
+  useEffect(()=>{const change=()=>setAdminOpen(window.location.hash==="#admin");window.addEventListener("hashchange",change);return()=>window.removeEventListener("hashchange",change);},[]);
   const [loading, setLoading] =
     useState(true);
   const [authenticated, setAuthenticated] =
@@ -2504,7 +2509,9 @@ export function App() {
         const organizationData =
           await authApi.organizations();
 
+        const platformAccess=await adminApi.access().catch(()=>({enabled:false}));
         setAuthenticated({
+          platformAdmin:platformAccess.enabled,
           user: session.user,
           organizations:
             organizationData.organizations,
@@ -2540,11 +2547,15 @@ export function App() {
   }
 
   if (authenticated) {
+    if(adminOpen)return <AdminConsole brand={<Brand/>} user={authenticated.user.displayName} onLogout={logout}/>;
     return (
+      <>
+      {authenticated.platformAdmin&&<div className="flex justify-end border-b border-[#dfe5dc] bg-[#f1f7e9] px-5 py-2 text-xs font-semibold"><a href="#admin" className="rounded px-3 py-1 text-[#46622b] underline">Platform administration</a></div>}
       <Workspace
         state={authenticated}
         onLogout={logout}
       />
+      </>
     );
   }
 

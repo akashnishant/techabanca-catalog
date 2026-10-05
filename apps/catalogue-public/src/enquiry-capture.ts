@@ -50,7 +50,7 @@ const targetSql = " FROM public_catalogue_routes r JOIN catalogue_publications p
   + "JOIN published_catalogues pc ON pc.publication_id = p.id JOIN catalogues c ON c.public_id = pc.catalogue_public_id "
   + "JOIN organizations o ON o.id = c.organization_id WHERE r.slug = ? AND r.status = 'active' AND p.state = 'active' "
   + "AND p.public_id = ? AND pc.catalogue_public_id = r.catalogue_public_id AND pc.slug = r.slug "
-  + "AND c.deleted_at IS NULL AND o.status = 'active' AND o.deleted_at IS NULL AND pc.show_contact = 1 "
+  + "AND c.status NOT IN ('suspended','archived') AND c.deleted_at IS NULL AND o.status = 'active' AND o.deleted_at IS NULL AND pc.show_contact = 1 "
   + "AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = r.slug)";
 export async function captureEnquiry(env: PublicBindings, site: Site, claims: EnquiryClaims, input: EnquiryInput,
   item: Item | null, clientAddress: string, date = new Date(), collectAnalytics = false): Promise<{ accepted: boolean; created?: boolean; retryAfter?: number }> {

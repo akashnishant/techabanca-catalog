@@ -1,3 +1,5 @@
+export * from "./administration";
+export * from "./report-security";
 export * from "./analytics";
 export * from "./sharing";
 export * from "./asset";

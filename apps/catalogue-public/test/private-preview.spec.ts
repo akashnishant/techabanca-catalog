@@ -23,6 +23,9 @@ async function get(f:Fixture,path="/", options:RequestInit={},bindings:Record<st
  return app.fetch(new Request(f.origin+f.prefix+path,options),{...env,PUBLICATION_PREVIEW_SECRET:secret,...bindings});
 }
 describe("signed private publication previews",()=>{
+ it("excludes reporting and rejects report submission from private previews",async()=>{const f=await previewFixture();expect(await(await get(f)).text()).not.toContain("Report this catalogue");expect((await get(f,"/report")).status).toBe(404);expect((await get(f,"/report",{method:"POST",body:"summary=private"})).status).toBe(405);});
+ it("blocks private previews of suspended source catalogues even without a route",async()=>{const f=await previewFixture();await env.DB.prepare("DELETE FROM public_catalogue_routes WHERE slug=?").bind(f.slug).run();await env.DB.prepare("UPDATE catalogues SET status='suspended' WHERE id=?").bind(f.n).run();expect((await get(f)).status).toBe(404);});
+ it("blocks private previews after organization suspension",async()=>{const f=await previewFixture();await env.DB.prepare("UPDATE organizations SET status='suspended' WHERE id=?").bind(f.n).run();expect((await get(f)).status).toBe(404);});
  it("shows a sealed candidate without making it publicly discoverable",async()=>{
   const f=await previewFixture();await env.DB.prepare("DELETE FROM public_catalogue_routes WHERE slug=?").bind(f.slug).run();
   expect((await app.fetch(new Request(f.origin+"/"),env)).status).toBe(404);

@@ -9,7 +9,7 @@ export class PublicRepository {
       "SELECT pc.*, p.public_id AS publication_public_id, p.revision_number FROM public_catalogue_routes r "
       + "JOIN catalogue_publications p ON p.id = r.publication_id JOIN published_catalogues pc ON pc.publication_id = p.id "
       + "JOIN catalogues c ON c.public_id = pc.catalogue_public_id JOIN organizations o ON o.id = c.organization_id "
-      + "WHERE c.deleted_at IS NULL AND o.deleted_at IS NULL AND o.status = 'active' AND " + publicSubscriptionSql(this.allowLegacyLocal) + " AND r.slug = ? AND r.status = 'active' AND p.state = 'active' AND pc.slug = r.slug "
+      + "WHERE c.status NOT IN ('suspended','archived') AND c.deleted_at IS NULL AND o.deleted_at IS NULL AND o.status = 'active' AND " + publicSubscriptionSql(this.allowLegacyLocal) + " AND r.slug = ? AND r.status = 'active' AND p.state = 'active' AND pc.slug = r.slug "
       + "AND pc.catalogue_public_id = r.catalogue_public_id AND p.catalogue_public_id = r.catalogue_public_id "
       + "AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = r.slug) LIMIT 1",
     ).bind(slug).first<Site>();
@@ -66,7 +66,8 @@ export class PublicRepository {
     return this.db.prepare(
       "SELECT pc.*, p.public_id AS publication_public_id, p.revision_number FROM catalogue_publications p "
       + "JOIN published_catalogues pc ON pc.publication_id = p.id "
-      + "WHERE pc.slug = ? AND p.public_id = ? AND p.state = 'building' AND p.sealed_at IS NOT NULL "
+      + "JOIN catalogues c ON c.public_id=pc.catalogue_public_id JOIN organizations o ON o.id=c.organization_id "
+      + "WHERE c.status NOT IN ('suspended','archived') AND c.deleted_at IS NULL AND o.deleted_at IS NULL AND o.status='active' AND pc.slug = ? AND p.public_id = ? AND p.state = 'building' AND p.sealed_at IS NOT NULL "
       + "AND p.preview_revoked_at IS NULL AND p.preview_expires_at = ? AND p.preview_expires_at > ? "
       + "AND pc.catalogue_public_id = p.catalogue_public_id "
       + "AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = pc.slug) "

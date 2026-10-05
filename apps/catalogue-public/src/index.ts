@@ -11,6 +11,9 @@ import { captureEnquiry, EnquiryCaptureError, enquiryInput, readEnquiryForm, val
 
 import { recordAnalytics, emitAnalytics, type AnalyticsPoint } from "./analytics";
 
+import { signReportToken } from "@techabanca/domain";
+import { captureReport, readReportForm, reportClaims, ReportError } from "./report-capture";
+import { reportPage } from "./report-render";
 const app = new Hono<{ Bindings: PublicBindings; Variables: { previewPrefix: string; previewRevision: number } }>();
 app.use("*", async (c, next) => {
   const deployment = c.env.DEPLOYMENT_ENVIRONMENT ?? "local";
@@ -57,7 +60,7 @@ function html(request: Request, body: string, status = 200, extraHeaders: Record
 }
 app.all("*", async c => {
   const request = c.req.raw;
-  if (request.method !== "GET" && request.method !== "HEAD" && !(request.method === "POST" && new URL(request.url).pathname === "/contact")) {
+  if (request.method !== "GET" && request.method !== "HEAD" && !(request.method === "POST" && ["/contact","/report"].includes(new URL(request.url).pathname))) {
     c.header("Allow", "GET, HEAD");
     return html(request, unavailable("Method not allowed", "Use a catalogue page link to continue."), 405);
   }
@@ -98,6 +101,28 @@ app.all("*", async c => {
   if (path === "/robots.txt") {
     c.header("Content-Type", "text/plain; charset=utf-8");
     return new Response(request.method === "HEAD" ? null : "User-agent: *\n" + (host.preview ? "Disallow: /\n" : "Allow: /\n"), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  }
+  if (path === "/report") {
+    if (preview) return html(request, unavailable(), 404);
+    const now=Math.floor(Date.now()/1000),secret=c.env.PUBLICATION_PREVIEW_SECRET;
+    const token=async()=>secret?signReportToken({v:1,purpose:"report",slug:site.slug,catalogueId:site.catalogue_public_id,
+      publicationId:site.publication_public_id,nonce:crypto.randomUUID().replace(/-/g,""),issuedAt:now,expiresAt:now+900},secret,now):undefined;
+    if(request.method==="POST"){
+      if(request.headers.get("Origin")!==url.origin||["cross-site","same-site"].includes(request.headers.get("Sec-Fetch-Site")??""))
+        return html(request,reportPage(site,host,{notice:"Use the report form on this catalogue."}),403);
+      let fields:Record<string,string>|undefined;
+      try{
+        fields=await readReportForm(request);
+        const claims=await reportClaims(fields,c.env,site,now);
+        if(!fields.companyWebsite)await captureReport(c.env,site,claims,fields,request.headers.get("CF-Connecting-IP")??"local");
+        return html(request,reportPage(site,host,{sent:true}));
+      }catch(error){
+        if(!(error instanceof ReportError))throw error;
+        return html(request,reportPage(site,host,{token:await token(),notice:error.message,reason:fields?.reason,summary:fields?.summary}),
+          error.status,error.status===429?{"Retry-After":String(error.retryAfter??3600)}:{});
+      }
+    }
+    return html(request,reportPage(site,host,{token:await token()}),secret?200:503);
   }
   const track = (points: AnalyticsPoint[]) => recordAnalytics(c.env, site, request, !!preview, points);
   if (path === "/go/whatsapp" && !preview) {

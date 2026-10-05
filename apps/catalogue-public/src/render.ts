@@ -7,9 +7,9 @@ export function escapeHtml(value: unknown): string {
 }
 const e = escapeHtml;
 import { masterBrandHtml as brand } from "./brand";
-function footer(site?: Site): string {
+function footer(site?: Site, host?: PublicHost): string {
   return '<footer class="footer"><div class="wrap footer-row"><div><div class="footer-name">' + e(site?.business_name || "Techabanca Catalogue")
-    + '</div><p>Products, services and conversations that move business forward.</p></div><div class="powered"><span>Powered by</span>' + brand + "</div></div></footer>";
+    + '</div><p>Products, services and conversations that move business forward.</p>' + (site && !host?.privatePreview ? '<a class="footer-report" href="/report">Report this catalogue</a>' : '') + '</div><div class="powered"><span>Powered by</span>' + brand + "</div></div></footer>";
 }
 function button(href: string, label: string, variant = ""): string {
   return '<a class="button ' + e(variant) + '" href="' + e(href) + '">' + e(label) + "</a>";
@@ -65,7 +65,7 @@ export function document(site: Site | undefined, host: PublicHost | undefined, p
     + '<meta property="og:type" content="website"><meta property="og:title" content="' + e(title) + '"><meta property="og:description" content="' + e(description.slice(0, 300)) + '">'
     + (options.image && host ? '<meta property="og:image" content="' + e(host.canonicalOrigin + options.image) + '">' : "")
     + '<meta name="theme-color" content="#0b1519"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/theme.css?theme=' + theme + '"></head><body><a class="skip" href="#main">Skip to content</a>'
-    + (site ? header(site, path) : "") + '<main id="main">' + body + "</main>" + footer(site) + "</body></html>";
+    + (site ? header(site, path) : "") + '<main id="main">' + body + "</main>" + footer(site, host) + "</body></html>";
 }
 export function unavailable(title = "Catalogue unavailable", message = "This catalogue is not available right now. Please check the address or try again later.", site?: Site, host?: PublicHost, path = "/"): string {
   return document(site, host, path, title, '<section class="wrap unavailable"><div><span class="eyebrow">Techabanca Catalogue</span><h1>' + e(title)
