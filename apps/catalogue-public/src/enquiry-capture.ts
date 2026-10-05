@@ -2,6 +2,8 @@ import { publicSubscriptionSql, ENQUIRY_CONSENT_VERSION, ENQUIRY_RETENTION_DAYS,
   type EnquiryClaims, type EnquiryInput } from "@techabanca/domain";
 import type { Item, PublicBindings, Site } from "./model";
 
+import { analyticsStatement } from "./analytics";
+
 export class EnquiryCaptureError extends Error {
   constructor(public readonly status: number, message: string) { super(message); }
 }
@@ -51,7 +53,7 @@ const targetSql = " FROM public_catalogue_routes r JOIN catalogue_publications p
   + "AND c.deleted_at IS NULL AND o.status = 'active' AND o.deleted_at IS NULL AND pc.show_contact = 1 "
   + "AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = r.slug)";
 export async function captureEnquiry(env: PublicBindings, site: Site, claims: EnquiryClaims, input: EnquiryInput,
-  item: Item | null, clientAddress: string, date = new Date()): Promise<{ accepted: boolean; retryAfter?: number }> {
+  item: Item | null, clientAddress: string, date = new Date(), collectAnalytics = false): Promise<{ accepted: boolean; created?: boolean; retryAfter?: number }> {
   const db = env.DB, now = date.toISOString(), targetPolicy = targetSql + " AND " + publicSubscriptionSql(env.DEPLOYMENT_ENVIRONMENT === "local");
   const target = await db.prepare("SELECT c.id AS catalogue_id, c.organization_id" + targetPolicy)
     .bind(site.slug, claims.publicationId).first<{ catalogue_id: number; organization_id: number }>();
@@ -80,8 +82,9 @@ export async function captureEnquiry(env: PublicBindings, site: Site, claims: En
         site.slug, claims.publicationId, client, window, window, claims.itemId, claims.itemId),
     db.prepare("INSERT INTO enquiry_activity (enquiry_id, activity_type, created_at) "
       + "SELECT id, 'created', ? FROM enquiries WHERE public_id = ? AND changes() = 1").bind(now, enquiryId),
+    ...(collectAnalytics ? [analyticsStatement(env, site, { event: "enquiry_submitted", itemId: item?.item_public_id }, now.slice(0, 10), enquiryId)] : []),
   ]);
-  if (result[2].meta.changes > 0) return { accepted: true };
+  if (result[2].meta.changes > 0) return { accepted: true, created: collectAnalytics && result[4].meta.changes > 0 };
   const existing = await db.prepare("SELECT 1 AS accepted FROM enquiries WHERE submission_nonce = ? AND catalogue_id = ?")
     .bind(claims.nonce, target.catalogue_id).first();
   if (existing) return { accepted: true };

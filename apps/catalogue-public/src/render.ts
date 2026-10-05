@@ -36,6 +36,10 @@ export function contactLinks(site: Site, host: PublicHost, item?: Item) {
     email: address ? "mailto:" + encodeURIComponent(address) + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(message) : null,
   };
 }
+function trackedContactLinks(site: Site, host: PublicHost, item?: Item) {
+  const links = contactLinks(site, host, item);
+  return { ...links, whatsapp: links.whatsapp && !host.privatePreview ? "/go/whatsapp" + (item ? "?item=" + encodeURIComponent(item.slug) : "") : links.whatsapp };
+}
 function price(item: Item): string {
   if (item.show_price !== 1 || item.price_minor_units === null || !item.currency_code || !/^[A-Z]{3}$/.test(item.currency_code)) return "Request a quote";
   try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: item.currency_code, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(item.price_minor_units / 100); }
@@ -79,7 +83,7 @@ function categoryCard(category: Category): string {
     + (category.description ? "<p>" + e(category.description) + "</p>" : "") + "</a>";
 }
 export function home(site: Site, host: PublicHost, categories: Category[], featured: Item[]): string {
-  const links = contactLinks(site, host);
+  const links = trackedContactLinks(site, host);
   const target = site.hero_cta_target === "whatsapp" && links.whatsapp ? links.whatsapp : site.hero_cta_target === "contact" && site.show_contact === 1 ? "/contact" : "/catalogue";
   const hero = site.hero_asset_public_id && site.hero_object_key
     ? '<img class="hero-picture" src="' + e(mediaUrl(site, site.hero_asset_public_id)) + '" alt="' + e(site.business_name) + '" width="800" height="600" fetchpriority="high">'
@@ -118,7 +122,7 @@ export function itemDetail(site: Site, host: PublicHost, categories: Category[],
   const item = detail.item;
   const category = site.show_categories === 1 ? categories.find(category => category.category_public_id === item.category_public_id) : undefined;
   const path = "/items/" + encodeURIComponent(item.slug);
-  const links = contactLinks(site, host, item);
+  const links = trackedContactLinks(site, host, item);
   const quote = site.show_contact === 1 ? "/contact?item=" + encodeURIComponent(item.slug) + "#enquiry" : links.whatsapp;
   const gallery = detail.images.length ? '<div class="gallery" aria-label="Product images">' + detail.images.map(image => '<a href="' + e(mediaUrl(site, image.asset_public_id)) + '" target="_blank" rel="noopener" aria-label="Open image: ' + e(image.alt_text || item.name) + '"><img src="' + e(mediaUrl(site, image.asset_public_id)) + '" alt="' + e(image.alt_text || item.name) + '" width="640" height="480"' + (image === detail.images[0] ? ' fetchpriority="high"' : ' loading="lazy"') + "></a>").join("") + "</div>"
     : '<div class="hero-empty" aria-hidden="true"><span>' + (item.item_type === "service" ? "Service" : "Product") + "</span><p>" + e(item.name) + "</p></div>";
@@ -172,7 +176,7 @@ function enquiryForm(site: Site, options: ContactForm, item?: Item): string {
 }
 
 export function contact(site: Site, host: PublicHost, item?: Item, options: ContactForm = {}): string {
-  const links = contactLinks(site, host, item);
+  const links = trackedContactLinks(site, host, item);
   const body = '<section class="wrap page-top"><span class="eyebrow">Let us help</span><h1>Get in touch</h1><p>Contact ' + e(site.business_name) + " for availability, product details or a quote.</p></section>"
     + '<section class="wrap section contact-grid"><div class="contact-card"><h2>Contact details</h2><dl>'
     + (links.call ? '<div class="contact-row"><dt>Phone</dt><dd><a href="' + e(links.call) + '">' + e(site.contact_phone) + "</a></dd></div>" : "")

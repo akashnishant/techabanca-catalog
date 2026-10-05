@@ -26,6 +26,14 @@ M9 adds signed public enquiry forms, published item context, an authenticated
 business inbox, status changes, team notes, permanent deletion and a 365-day
 availability default with daily retention cleanup. See [enquiries](docs/enquiries.md).
 
+
+M10 adds a single-use 14-day trial, subscription usage/access checks and a gated
+provider test lifecycle. No commercial prices or live payment credentials are
+activated. See [subscriptions](docs/subscriptions.md).
+
+M11 adds privacy-conscious catalogue analytics, daily UTC aggregates, trends,
+top items, bot/prefetch filtering and privacy opt-outs. See [analytics](docs/analytics.md).
+
 ## Workspaces
 
 - `apps/catalogue-app`: React/TypeScript management SPA and same-origin Hono Worker API
@@ -51,15 +59,15 @@ npm.cmd run db:migrate:local
 npm.cmd run verify
 ~~~
 
-Run each service from its own terminal:
+Run the combined local workspace and public catalogue from one terminal:
 
 ~~~powershell
-npm.cmd run dev --workspace @techabanca/catalogue-app -- --host 127.0.0.1 --port 5173 --strictPort
+npm.cmd run dev:local
 ~~~
 
-~~~powershell
-npm.cmd run dev --workspace @techabanca/catalogue-public -- --host 127.0.0.1 --port 5174 --strictPort
-~~~
+Stop any separate app/public development processes first. The combined command
+runs both Workers in one local runtime so concurrent analytics reads and public
+writes share a single D1 owner. It retains the same ports and local data.
 
 Management: http://127.0.0.1:5173/
 Public health: http://127.0.0.1:5174/health
@@ -67,7 +75,7 @@ Public health: http://127.0.0.1:5174/health
 Local D1/R2 state is retained under the project's ignored `.wrangler` directory.
 Register a local account and complete onboarding to enter the authoring workspace.
 For local preview and publishing configuration, including the shared signing secret,
-see [publishing](docs/publishing.md). Both services must be running.
+see [publishing](docs/publishing.md). Use the combined local command for full application testing.
 
 ## Verification and contracts
 

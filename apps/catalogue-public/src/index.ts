@@ -1,13 +1,15 @@
 import { Hono } from "hono";
-import { hasPublicIdPrefix, isValidItemSlug, verifyPreview, signEnquiryToken, verifyEnquiryToken, validateEnquiry, type EnquiryInput } from "@techabanca/domain";
+import { hasPublicIdPrefix, isValidItemSlug, verifyPreview, signEnquiryToken, verifyEnquiryToken, validateEnquiry, type EnquiryInput, analyticsEligible } from "@techabanca/domain";
 import { publicThemeCss } from "@techabanca/themes";
 import type { Item, PublicBindings } from "./model";
 import { PublicRepository } from "./repository";
 import { FilterError, readFilters, resolveHost } from "./routing";
-import { about, catalogue, contact, home, itemDetail, unavailable } from "./render";
+import { about, catalogue, contact, home, itemDetail, unavailable, contactLinks } from "./render";
 import { serveMedia } from "./media";
 import { faviconSvg } from "./brand";
 import { captureEnquiry, EnquiryCaptureError, enquiryInput, readEnquiryForm, validateFormToken } from "./enquiry-capture";
+
+import { recordAnalytics, emitAnalytics, type AnalyticsPoint } from "./analytics";
 
 const app = new Hono<{ Bindings: PublicBindings; Variables: { previewPrefix: string; previewRevision: number } }>();
 app.use("*", async (c, next) => {
@@ -36,7 +38,7 @@ app.use("*", async (c, next) => {
   }
   if (privatePreview) c.header("X-Robots-Tag", "noindex, nofollow");
   c.header("X-Content-Type-Options", "nosniff");
-  c.header("Referrer-Policy", privatePreview ? "no-referrer" : "strict-origin-when-cross-origin");
+  c.header("Referrer-Policy", privatePreview || url.pathname === "/go/whatsapp" ? "no-referrer" : "strict-origin-when-cross-origin");
   c.header("Content-Security-Policy", "default-src 'none'; img-src 'self'; style-src 'self'; script-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
   c.header("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
   c.header("Cache-Control", "no-store");
@@ -77,7 +79,7 @@ app.all("*", async c => {
     if (!site) return html(request, unavailable(), 404);
     const prefix = "/preview/" + preview[1];
     c.set("previewPrefix", prefix); c.set("previewRevision", site.revision_number);
-    host = { ...host, preview: true };
+    host = { ...host, preview: true, privatePreview: true };
     if (!preview[2]) return c.redirect(prefix + "/", 308);
     path = preview[2];
   } else site = await repository.site(host.slug);
@@ -97,12 +99,24 @@ app.all("*", async c => {
     c.header("Content-Type", "text/plain; charset=utf-8");
     return new Response(request.method === "HEAD" ? null : "User-agent: *\n" + (host.preview ? "Disallow: /\n" : "Allow: /\n"), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
+  const track = (points: AnalyticsPoint[]) => recordAnalytics(c.env, site, request, !!preview, points);
+  if (path === "/go/whatsapp" && !preview) {
+    if ([...url.searchParams.keys()].some(key => key !== "item") || url.searchParams.getAll("item").length > 1) return html(request, unavailable(), 400);
+    const slug = url.searchParams.get("item");
+    const detail = slug && isValidItemSlug(slug) ? await repository.detail(site, slug) : null;
+    if (slug && !detail) return html(request, unavailable("Item not found"), 404);
+    const target = contactLinks(site, host, detail?.item).whatsapp;
+    if (!target) return html(request, unavailable("WhatsApp unavailable"), 404);
+    await track([{ event: "whatsapp_click", itemId: detail?.item.item_public_id }]);
+    return new Response(null, { status: 302, headers: { Location: target, "Referrer-Policy": "no-referrer", "X-Robots-Tag": "noindex, nofollow" } });
+  }
   const categories = await repository.categories(site);
   if (path === "/") {
     const featured = site.show_featured_items === 1 ? await repository.items(site, { query: "", type: "all", category: "", page: 1, featured: true }, null, 6) : { items: [] };
+    await track([{ event: "catalogue_view" }]);
     return html(request, home(site, host, categories, featured.items));
   }
-  if (path === "/about" && site.show_about === 1) return html(request, about(site, host));
+  if (path === "/about" && site.show_about === 1) { await track([{ event: "catalogue_view" }]); return html(request, about(site, host)); }
   if (path === "/contact" && site.show_contact === 1) {
     const itemSlug = url.searchParams.get("item");
     if (itemSlug && !isValidItemSlug(itemSlug)) return html(request, unavailable("Item not found", "This item is not available in this catalogue.", site, host, path), 404);
@@ -137,7 +151,8 @@ app.all("*", async c => {
           if (Object.keys(checked.errors).length) return html(request, contact(site, host, topic ?? undefined,
             { formToken: await token(topic), values, errors: checked.errors }), 422);
           const result = await captureEnquiry(c.env, site, claims, values, topic,
-            request.headers.get("CF-Connecting-IP") ?? "local");
+            request.headers.get("CF-Connecting-IP") ?? "local", new Date(), analyticsEligible(request, false, true));
+          if (result.created) emitAnalytics(c.env, site, { event: "enquiry_submitted", itemId: topic?.item_public_id });
           if (!result.accepted) {
             return html(request, contact(site, host, topic ?? undefined, { formToken: await token(topic), values,
               notice: "Too many enquiries were sent recently. Please wait a few minutes before trying again." }), 429, { "Retry-After": String(result.retryAfter) });
@@ -155,7 +170,9 @@ app.all("*", async c => {
     const cookie = (request.headers.get("cookie") ?? "").split(";").map(value => value.trim()).find(value => value.startsWith(cookieName + "="))?.slice(cookieName.length + 1);
     const receipt = cookie && url.searchParams.get("sent") === "1" ? await verifyEnquiryToken(cookie, secret, now) : null;
     const sent = !!receipt && receipt.purpose === "receipt" && receipt.slug === site.slug && receipt.catalogueId === site.catalogue_public_id;
-    return html(request, contact(site, host, detail?.item, { formToken: sent ? undefined : await token(), preview: !!preview, sent }));
+    const formToken = sent ? undefined : await token();
+    await track([{ event: "catalogue_view" }, ...(formToken ? [{ event: "enquiry_started" as const, itemId: detail?.item.item_public_id }] : [])]);
+    return html(request, contact(site, host, detail?.item, { formToken, preview: !!preview, sent }));
   }
   const itemMatch = /^\/items\/([^/]+)$/.exec(path);
   if (itemMatch) {
@@ -163,6 +180,7 @@ app.all("*", async c => {
     try { slug = decodeURIComponent(itemMatch[1]); } catch { slug = ""; }
     const detail = isValidItemSlug(slug) ? await repository.detail(site, slug) : null;
     if (!detail) return html(request, unavailable("Item not found", "This item is not available in this catalogue.", site, host, path), 404);
+    await track([{ event: "catalogue_view" }, { event: "item_view", itemId: detail.item.item_public_id }]);
     return html(request, itemDetail(site, host, categories, detail));
   }
   const categoryMatch = /^\/categories\/([^/]+)$/.exec(path);
@@ -175,6 +193,7 @@ app.all("*", async c => {
       if (filters.category && !category) return html(request, unavailable("Category not found", "This category is not available in this catalogue.", site, host, path), 404);
       const page = await repository.items(site, filters, category?.category_public_id);
       if (filters.page > Math.max(1, Math.ceil(page.total / page.pageSize))) return html(request, unavailable("Page not found", "Choose a page from the catalogue results.", site, host, path), 404);
+      await track([{ event: "catalogue_view" }, ...(filters.query && filters.page === 1 ? [{ event: "search" as const }] : [])]);
       return html(request, catalogue(site, host, categories, page, filters, categoryMatch ? category : undefined));
     } catch (error) {
       if (error instanceof FilterError) return html(request, unavailable("Check your search", error.message, site, host, path), 400);

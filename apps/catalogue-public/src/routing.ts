@@ -2,7 +2,7 @@ import { isValidCatalogueSlug, readCatalogueDeployment } from "@techabanca/domai
 import type { Filters } from "./model";
 
 const reserved = new Set(["www", "techabanca", "billing", "billing-api", "catalogue", "catalogue-preview", "catalog", "api", "admin", "support", "help", "legal", "privacy", "security", "mail", "status", "assets", "static"]);
-export type PublicHost = { slug: string; preview: boolean; local: boolean; canonicalOrigin: string };
+export type PublicHost = { slug: string; preview: boolean; privatePreview?: boolean; local: boolean; canonicalOrigin: string };
 export function resolveHost(url: URL, localEnabled = false, environment?: string): PublicHost | null {
   const deployment = readCatalogueDeployment(environment);
   if (deployment === null || (deployment !== "local" && url.port !== "")) return null;

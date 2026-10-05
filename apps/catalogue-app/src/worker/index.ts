@@ -15,6 +15,8 @@ import { createTenantAccessRoutes } from "./routes/tenant-access-routes";
 import { createEnquiryRoutes } from "./routes/enquiry-routes";
 import { purgeExpiredEnquiries } from "./services/enquiry-service";
 import { createSubscriptionRoutes, createPaymentWebhookRoutes } from "./routes/subscription-routes";
+import { createAnalyticsRoutes } from "./routes/analytics-routes";
+import { purgeExpiredAnalytics } from "./services/analytics-service";
 const app = new Hono<CatalogueAppEnv>();
 app.use("*", async (c, next) => {
   c.header("X-Robots-Tag", "noindex, nofollow");
@@ -22,6 +24,7 @@ app.use("*", async (c, next) => {
   if (deployment === null) return c.json({ error: { code: "deployment_unavailable", message: "This workspace is unavailable." } }, 503);
   c.header("X-Techabanca-Environment", deployment);
   const url = new URL(c.req.url);
+  if (deployment === "local" && c.env.LOCAL_PUBLIC_WORKER && url.hostname.endsWith(".localhost")) return c.env.LOCAL_PUBLIC_WORKER.fetch(c.req.raw);
   if (!isManagementHost(url, deployment)) return c.text("Not found", 404);
   if (deployment !== "local" && url.protocol !== "https:") {
     url.protocol = "https:";
@@ -41,6 +44,7 @@ app.route("/api/v1/auth", createTenantAccessRoutes());
 app.route("/api/v1/onboarding", createOnboardingRoutes());
 app.route("/api/v1/catalogue", createPublicationRoutes());
 app.route("/api/v1/catalogue", createEnquiryRoutes());
+app.route("/api/v1/catalogue", createAnalyticsRoutes());
 app.route("/api/v1/catalogue", createSubscriptionRoutes());
 app.route("/api/v1/payments/webhooks", createPaymentWebhookRoutes());
 app.route("/api/v1/catalogue", createMediaRoutes());
@@ -58,6 +62,8 @@ export default Object.assign(app, {
   async scheduled(controller: ScheduledController, env: CatalogueAppEnv["Bindings"]) {
     if (controller.cron !== "0 3 * * *" || readCatalogueDeployment(env.DEPLOYMENT_ENVIRONMENT) === null) return;
     const cleanup = await purgeExpiredEnquiries(env.DB);
+    const analyticsCleanup = await purgeExpiredAnalytics(env.DB);
+    if (analyticsCleanup.hasMore) throw new Error("analytics_retention_backlog");
     if (cleanup.hasMore) throw new Error("enquiry_retention_backlog");
   },
 });

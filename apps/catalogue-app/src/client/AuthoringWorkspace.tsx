@@ -20,6 +20,7 @@ import { CategoriesManager } from "./CategoriesManager";
 import { CatalogueManager } from "./CatalogueManager";
 import { EnquiriesWorkspace } from "./EnquiriesWorkspace";
 import { WebsiteWorkspace } from "./WebsiteWorkspace";
+import { AnalyticsWorkspace } from "./AnalyticsWorkspace";
 import { SubscriptionWorkspace } from "./SubscriptionWorkspace";
 import type { CatalogueMode } from "./onboarding-api";
 
@@ -1185,11 +1186,7 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "analytics" && (
-                <Placeholder
-                  eyebrow="Analytics"
-                  title="Catalogue performance"
-                  description="Analytics will be added after the public catalogue and publishing path are active, using privacy-conscious aggregate events rather than personal visitor data."
-                />
+                <AnalyticsWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} />
               )}
 
               {activeView === "share" && (

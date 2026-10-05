@@ -80,7 +80,7 @@ describe("public catalogue renderer", () => {
     expect(await (await get(f.origin, "/about")).text()).toContain("Published business introduction");
     const html = await (await get(f.origin, "/contact?item=precision-pump")).text();
     for (const text of ["Request a quote", "Precision Pump", "orders@example.test", "Demo address, Mumbai", "Enquire on WhatsApp", "Enquire by email"]) expect(html).toContain(text);
-    expect(html).toContain("https://wa.me/919876543210?text=");
+    expect(html).toContain('href="/go/whatsapp?item=precision-pump"');
     expect(html).toContain('href="tel:+919876543210"');
     expect(html).toContain("mailto:orders%40example.test?subject=Request%20a%20quote%3A%20Precision%20Pump");
     expect((await get(f.origin, "/contact?item=hidden-only")).status).toBe(404);

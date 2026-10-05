@@ -8,6 +8,7 @@
     "packages/*"
   ],
   "scripts": {
+    "dev:local": "node scripts/dev-local.mjs",
     "dev:app": "npm run dev --workspace @techabanca/catalogue-app",
     "dev:public": "npm run dev --workspace @techabanca/catalogue-public",
     "typecheck": "npm run typecheck --workspaces --if-present",

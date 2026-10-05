@@ -26,6 +26,8 @@ export default defineConfig({
     })),
   ],
   test: {
+    // D1/R2 integration fixtures need bounded headroom on Windows under load.
+    testTimeout: 15000,
     setupFiles: ["./test/apply-migrations.ts"],
   },
 });
