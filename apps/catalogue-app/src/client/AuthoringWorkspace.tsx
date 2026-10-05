@@ -20,6 +20,7 @@ import { CategoriesManager } from "./CategoriesManager";
 import { CatalogueManager } from "./CatalogueManager";
 import { EnquiriesWorkspace } from "./EnquiriesWorkspace";
 import { WebsiteWorkspace } from "./WebsiteWorkspace";
+import { SubscriptionWorkspace } from "./SubscriptionWorkspace";
 import type { CatalogueMode } from "./onboarding-api";
 
 type WorkspaceView =
@@ -1221,11 +1222,7 @@ export function AuthoringWorkspace({
               )}
 
               {activeView === "subscription" && (
-                <Placeholder
-                  eyebrow="Subscription"
-                  title="Plan and usage"
-                  description="Plan entitlements and provider lifecycle controls will be surfaced here in the subscription milestone. Existing authoring content remains editable when plan limits are reached."
-                />
+                <SubscriptionWorkspace key={selectedOrganization.id} organizationId={selectedOrganization.id} />
               )}
 
               {activeView === "settings" && (

@@ -1,4 +1,4 @@
-import { ENQUIRY_CONSENT_VERSION, ENQUIRY_RETENTION_DAYS, enquiryClientHash, verifyEnquiryToken,
+import { publicSubscriptionSql, ENQUIRY_CONSENT_VERSION, ENQUIRY_RETENTION_DAYS, enquiryClientHash, verifyEnquiryToken,
   type EnquiryClaims, type EnquiryInput } from "@techabanca/domain";
 import type { Item, PublicBindings, Site } from "./model";
 
@@ -52,8 +52,8 @@ const targetSql = " FROM public_catalogue_routes r JOIN catalogue_publications p
   + "AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = r.slug)";
 export async function captureEnquiry(env: PublicBindings, site: Site, claims: EnquiryClaims, input: EnquiryInput,
   item: Item | null, clientAddress: string, date = new Date()): Promise<{ accepted: boolean; retryAfter?: number }> {
-  const db = env.DB, now = date.toISOString();
-  const target = await db.prepare("SELECT c.id AS catalogue_id, c.organization_id" + targetSql)
+  const db = env.DB, now = date.toISOString(), targetPolicy = targetSql + " AND " + publicSubscriptionSql(env.DEPLOYMENT_ENVIRONMENT === "local");
+  const target = await db.prepare("SELECT c.id AS catalogue_id, c.organization_id" + targetPolicy)
     .bind(site.slug, claims.publicationId).first<{ catalogue_id: number; organization_id: number }>();
   if (!target) throw new EnquiryCaptureError(404, "This catalogue is no longer accepting enquiries.");
   const window = Math.floor(date.getTime() / 600000), client = await enquiryClientHash(clientAddress, env.PUBLICATION_PREVIEW_SECRET!);
@@ -70,7 +70,7 @@ export async function captureEnquiry(env: PublicBindings, site: Site, claims: En
     db.prepare("INSERT INTO enquiries (public_id, organization_id, catalogue_id, source, contact_name, company_name, email, phone, message, "
       + "status, created_at, updated_at, publication_public_id, published_item_public_id, published_item_name, submission_nonce, consent_at, consent_version, expires_at) "
       + "SELECT ?, c.organization_id, c.id, 'contact', ?, ?, ?, ?, ?, 'new', ?, ?, ?, ?, ?, ?, ?, ?, ?"
-      + targetSql
+      + targetPolicy
       + " AND EXISTS (SELECT 1 FROM enquiry_rate_windows w WHERE w.catalogue_id = c.id AND w.client_hash = ? AND w.window_start = ? AND w.attempts <= 5)"
       + " AND EXISTS (SELECT 1 FROM enquiry_rate_windows w WHERE w.catalogue_id = c.id AND w.client_hash = '*' AND w.window_start = ? AND w.attempts <= 100)"
       + " AND (? IS NULL OR EXISTS (SELECT 1 FROM published_items i WHERE i.publication_id = p.id AND i.item_public_id = ?))"

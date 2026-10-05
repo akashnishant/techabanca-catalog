@@ -14,6 +14,7 @@ import { createOnboardingRoutes } from "./routes/onboarding-routes";
 import { createTenantAccessRoutes } from "./routes/tenant-access-routes";
 import { createEnquiryRoutes } from "./routes/enquiry-routes";
 import { purgeExpiredEnquiries } from "./services/enquiry-service";
+import { createSubscriptionRoutes, createPaymentWebhookRoutes } from "./routes/subscription-routes";
 const app = new Hono<CatalogueAppEnv>();
 app.use("*", async (c, next) => {
   c.header("X-Robots-Tag", "noindex, nofollow");
@@ -40,6 +41,8 @@ app.route("/api/v1/auth", createTenantAccessRoutes());
 app.route("/api/v1/onboarding", createOnboardingRoutes());
 app.route("/api/v1/catalogue", createPublicationRoutes());
 app.route("/api/v1/catalogue", createEnquiryRoutes());
+app.route("/api/v1/catalogue", createSubscriptionRoutes());
+app.route("/api/v1/payments/webhooks", createPaymentWebhookRoutes());
 app.route("/api/v1/catalogue", createMediaRoutes());
 app.route("/api/v1/catalogue", createAssetRoutes());
 app.route("/api/v1/catalogue", createAttributeRoutes());

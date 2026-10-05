@@ -66,5 +66,11 @@ export async function createFixture(overrides: Partial<Site> = {}, extraItems = 
     env.DB.prepare("UPDATE catalogue_publications SET state = 'active', activated_at = ? WHERE id = ?").bind(now, n),
     env.DB.prepare("INSERT INTO public_catalogue_routes (slug, catalogue_public_id, publication_id, status, updated_at) VALUES (?, ?, ?, 'active', ?)").bind(slug, catalogueId, n, now),
   ]);
+  const accessStart = new Date(Date.now() - 86400000).toISOString(), accessEnd = new Date(Date.now() + 14 * 86400000).toISOString();
+  await env.DB.batch([
+    env.DB.prepare("INSERT INTO subscription_plans (id, code, name, created_at, updated_at) VALUES (?, ?, 'Public fixture trial', ?, ?)").bind(n, "public-trial-" + n, accessStart, accessStart),
+    env.DB.prepare("INSERT INTO plan_entitlements (plan_id, entitlement_key, value_type, boolean_value, created_at, updated_at) VALUES (?, 'catalogue.publish', 'boolean', 1, ?, ?)").bind(n, accessStart, accessStart),
+    env.DB.prepare("INSERT INTO subscriptions (public_id, organization_id, plan_id, status, trial_starts_at, trial_ends_at, created_at, updated_at) VALUES (?, ?, ?, 'trialing', ?, ?, ?, ?)").bind(publicId("sub", n), n, n, accessStart, accessEnd, accessStart, accessStart),
+  ]);
   return { n, slug, catalogueId, publicationId, productId, imageId, heroId, documentId, unreferencedId, imageKey, heroKey, documentKey, header, origin: "https://" + slug + ".techabanca.com" };
 }

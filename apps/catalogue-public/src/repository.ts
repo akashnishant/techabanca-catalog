@@ -1,13 +1,15 @@
+import { publicSubscriptionSql } from "@techabanca/domain";
 import type { Attribute, Category, Detail, Document, Filters, Image, Item, ItemPage, Media, Site } from "./model";
 
 const itemSelect = "SELECT i.*, (SELECT m.asset_public_id FROM published_item_images m WHERE m.publication_id = i.publication_id AND m.item_public_id = i.item_public_id AND m.mime_type IN ('image/png', 'image/jpeg', 'image/webp') ORDER BY m.is_primary DESC, m.sort_order, m.asset_public_id LIMIT 1) AS cover_asset_public_id FROM published_items i";
 export class PublicRepository {
-  constructor(private readonly db: D1Database) {}
+  constructor(private readonly db: D1Database, private readonly allowLegacyLocal = false) {}
   async site(slug: string): Promise<Site | null> {
     return this.db.prepare(
       "SELECT pc.*, p.public_id AS publication_public_id, p.revision_number FROM public_catalogue_routes r "
       + "JOIN catalogue_publications p ON p.id = r.publication_id JOIN published_catalogues pc ON pc.publication_id = p.id "
-      + "WHERE r.slug = ? AND r.status = 'active' AND p.state = 'active' AND pc.slug = r.slug "
+      + "JOIN catalogues c ON c.public_id = pc.catalogue_public_id JOIN organizations o ON o.id = c.organization_id "
+      + "WHERE c.deleted_at IS NULL AND o.deleted_at IS NULL AND o.status = 'active' AND " + publicSubscriptionSql(this.allowLegacyLocal) + " AND r.slug = ? AND r.status = 'active' AND p.state = 'active' AND pc.slug = r.slug "
       + "AND pc.catalogue_public_id = r.catalogue_public_id AND p.catalogue_public_id = r.catalogue_public_id "
       + "AND NOT EXISTS (SELECT 1 FROM reserved_slugs rs WHERE rs.slug = r.slug) LIMIT 1",
     ).bind(slug).first<Site>();

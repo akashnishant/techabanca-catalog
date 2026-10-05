@@ -88,9 +88,11 @@ async function createSubscription(input: {
        plan_id,
        status,
        billing_interval,
+       current_period_starts_at,
+       current_period_ends_at,
        created_at,
        updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       input.id,
@@ -99,6 +101,8 @@ async function createSubscription(input: {
       input.planId,
       input.status,
       "monthly",
+      new Date(Date.now() - 86400000).toISOString(),
+      new Date(Date.now() + 30 * 86400000).toISOString(),
       now,
       now,
     )

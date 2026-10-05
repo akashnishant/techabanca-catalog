@@ -66,7 +66,7 @@ app.all("*", async c => {
     url.protocol = "https:"; url.port = "";
     return c.redirect(url.toString(), 308);
   }
-  const repository = new PublicRepository(c.env.DB);
+  const repository = new PublicRepository(c.env.DB, c.env.DEPLOYMENT_ENVIRONMENT === "local");
   let site;
   let path = url.pathname;
   const preview = /^\/preview\/([^/]+)(\/.*)?$/.exec(path);

@@ -1,5 +1,5 @@
 import {
-  subscriptionGrantsEntitlements,
+  subscriptionAccessSql,
   type EntitlementValue,
   type TenantContext,
 } from "@techabanca/domain";
@@ -20,6 +20,7 @@ export class EntitlementService {
   async get(
     tenant: TenantContext,
     entitlementKey: string,
+    date = new Date(),
   ): Promise<EntitlementValue | null> {
     const row = await this.db
       .prepare(
@@ -30,17 +31,18 @@ export class EntitlementService {
            e.integer_value,
            e.string_value
          FROM subscriptions s
+         INNER JOIN subscription_plans p ON p.id = s.plan_id AND p.is_active = 1
          INNER JOIN plan_entitlements e
            ON e.plan_id = s.plan_id
          WHERE s.organization_id = ?
-           AND s.status IN ('trialing', 'active', 'past_due')
+           AND ${subscriptionAccessSql()}
            AND e.entitlement_key = ?
          LIMIT 1`,
       )
-      .bind(tenant.organizationId, entitlementKey)
+      .bind(tenant.organizationId, date.toISOString(), date.toISOString(), date.toISOString(), date.toISOString(), entitlementKey)
       .first<EntitlementRow>();
 
-    if (!row || !subscriptionGrantsEntitlements(row.status)) {
+    if (!row) {
       return null;
     }
 

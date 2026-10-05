@@ -9,6 +9,7 @@ export * from "./preview-token";
 export * from "./deployment";
 export * from "./slug";
 export * from "./subscription";
+export * from "./subscription-lifecycle";
 export * from "./theme";
 export * from "./time";
 export * from "./tenant";
