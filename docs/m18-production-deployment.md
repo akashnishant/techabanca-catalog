@@ -68,3 +68,5 @@ Record the Worker version IDs and source seal, DNS/TLS result, management UI che
 Complete real registration/login and authenticated production pilot checks only after the dedicated Turnstile widget is active. Test public publishing only after safe business-host routing is configured. Commercial offers remain inactive; no Billing entitlement or payment changes are part of this deployment.
 
 Historical M17 offline acceptance remains recorded in docs/m17-production-resources.md. This M18 approval supersedes its pending production authorization and mandatory hosted staging prerequisite for the scope above.
+
+The Siteverify request uses the Workers-supported `manual` redirect mode and rejects every non-success HTTP status, including redirects. Its tests construct a native Worker request to check runtime options as well as the provider response.

@@ -48,7 +48,7 @@ export async function verifyAuthChallenge(env: Bindings, request: Request, actio
   let result: Record<string, unknown>;
   try {
     const response = await fetcher("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
-      method: "POST", headers: { "Content-Type": "application/json" }, redirect: "error",
+      method: "POST", headers: { "Content-Type": "application/json" }, redirect: "manual",
       body: JSON.stringify({ secret: env.TURNSTILE_SECRET_KEY, response: token }), signal: AbortSignal.timeout(5000),
     });
     if (!response.ok) throw unavailable();

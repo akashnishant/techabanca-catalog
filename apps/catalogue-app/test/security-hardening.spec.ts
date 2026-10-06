@@ -38,7 +38,9 @@ describe("hosted bot verification", () => {
   it("verifies every attempt server-side with action, hostname, expiry and a bounded timeout", async () => {
     const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       expect(_url).toBe("https://challenges.cloudflare.com/turnstile/v0/siteverify");
-      expect(init?.method).toBe("POST"); expect(init?.redirect).toBe("error"); expect(init?.signal).toBeTruthy();
+      expect(init?.method).toBe("POST"); expect(init?.redirect).toBe("manual"); expect(init?.signal).toBeTruthy();
+      // Use the native Workers constructor so unsupported fetch options cannot pass this mock.
+      new Request(String(_url), init);
       expect(JSON.parse(String(init?.body))).toEqual({ secret: hosted.TURNSTILE_SECRET_KEY, response: "synthetic-token" });
       return response(valid);
     });
@@ -58,9 +60,10 @@ describe("hosted bot verification", () => {
     await expect(verifyAuthChallenge(hosted, request(), "login", token, fetcher, now)).rejects.toMatchObject({ status: 400 });
     expect(fetcher).not.toHaveBeenCalled();
   });
-  it.each(["network", "http", "json", "oversize"] as const)("fails closed on %s provider failure", async kind => {
+  it.each(["network", "http", "redirect", "json", "oversize"] as const)("fails closed on %s provider failure", async kind => {
     const fetcher = (async () => { if (kind === "network") throw new Error("PRIVATE SECRET");
       if (kind === "http") return response({}, 500);
+      if (kind === "redirect") return new Response("", { status: 302, headers: { Location: "https://untrusted-provider.example" } });
       return new Response(kind === "oversize" ? "x".repeat(8193) : "not-json"); }) as typeof fetch;
     await expect(verifyAuthChallenge(hosted, request(), "login", "synthetic-token", fetcher, now))
       .rejects.toMatchObject({ status: 503, code: "authentication_unavailable" });
