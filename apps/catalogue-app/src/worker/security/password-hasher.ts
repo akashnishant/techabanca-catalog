@@ -1,5 +1,12 @@
+import { scrypt } from "node:crypto";
+
+// OWASP scrypt settings: 16 MiB, N=2^14, r=8, p=5.
+const SCRYPT_N = 16_384;
+const SCRYPT_R = 8;
+const SCRYPT_P = 5;
+const SCRYPT_MAX_MEMORY = 32 * 1024 * 1024;
+
 const PASSWORD_ALGORITHM = "pbkdf2-sha256";
-const PASSWORD_ITERATIONS = 600_000;
 const PASSWORD_SALT_BYTES = 16;
 const PASSWORD_DERIVED_BYTES = 32;
 
@@ -76,6 +83,17 @@ async function derivePassword(
   return new Uint8Array(bits);
 }
 
+async function deriveScrypt(password: string, salt: Uint8Array): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, PASSWORD_DERIVED_BYTES,
+      { N: SCRYPT_N, r: SCRYPT_R, p: SCRYPT_P, maxmem: SCRYPT_MAX_MEMORY },
+      (error, derived) => {
+        if (error) reject(error);
+        else resolve(new Uint8Array(derived));
+      });
+  });
+}
+
 export class PasswordHasher {
   async hash(password: string): Promise<string> {
     if (password.length === 0) {
@@ -86,15 +104,13 @@ export class PasswordHasher {
       new Uint8Array(PASSWORD_SALT_BYTES),
     );
 
-    const derived = await derivePassword(
-      password,
-      salt,
-      PASSWORD_ITERATIONS,
-    );
+    const derived = await deriveScrypt(password, salt);
 
     return [
-      PASSWORD_ALGORITHM,
-      PASSWORD_ITERATIONS.toString(),
+      "scrypt",
+      SCRYPT_N.toString(),
+      SCRYPT_R.toString(),
+      SCRYPT_P.toString(),
       bytesToHex(salt),
       bytesToHex(derived),
     ].join("$");
@@ -104,11 +120,23 @@ export class PasswordHasher {
     password: string,
     encodedHash: string,
   ): Promise<boolean> {
-    if (password.length === 0) {
+    if (password.length === 0 || encodedHash.length > 512) {
       return false;
     }
 
     const parts = encodedHash.split("$");
+
+    if (parts[0] === "scrypt") {
+      if (parts.length !== 6 || parts[1] !== String(SCRYPT_N)
+        || parts[2] !== String(SCRYPT_R) || parts[3] !== String(SCRYPT_P)) return false;
+      const salt = hexToBytes(parts[4]);
+      const expected = hexToBytes(parts[5]);
+      if (!salt || salt.length !== PASSWORD_SALT_BYTES
+        || !expected || expected.length !== PASSWORD_DERIVED_BYTES) return false;
+      return constantTimeEqual(await deriveScrypt(password, salt), expected);
+    }
+
+    // Retain existing PBKDF2 hashes where the runtime supports their work factor.
 
     if (parts.length !== 4) {
       return false;
@@ -125,7 +153,8 @@ export class PasswordHasher {
       return false;
     }
 
-    const iterations = Number.parseInt(iterationsRaw, 10);
+    if (!/^[1-9][0-9]{0,6}$/.test(iterationsRaw)) return false;
+    const iterations = Number(iterationsRaw);
     if (
       !Number.isSafeInteger(iterations)
       || iterations <= 0

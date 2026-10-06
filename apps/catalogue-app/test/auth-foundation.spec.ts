@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   SessionRepository,
   TenantAccessRepository,
@@ -137,7 +137,7 @@ describe("authentication foundation", () => {
 
     expect(encoded).not.toContain(password);
     expect(encoded).toMatch(
-      /^pbkdf2-sha256\$600000\$[0-9a-f]{32}\$[0-9a-f]{64}$/,
+      /^scrypt\$16384\$8\$5\$[0-9a-f]{32}\$[0-9a-f]{64}$/,
     );
     await expect(
       hasher.verify(password, encoded),
@@ -148,6 +148,40 @@ describe("authentication foundation", () => {
     await expect(
       hasher.verify(password, "invalid"),
     ).resolves.toBe(false);
+  });
+
+  it("hashes and verifies under the hosted PBKDF2 iteration ceiling", async () => {
+    const original = crypto.subtle.deriveBits.bind(crypto.subtle);
+    const guarded = vi.spyOn(crypto.subtle, "deriveBits").mockImplementation((algorithm, key, length) => {
+      if (typeof algorithm === "object" && "iterations" in algorithm && Number(algorithm.iterations) > 100_000)
+        throw new DOMException("Hosted PBKDF2 iteration ceiling", "NotSupportedError");
+      return original(algorithm, key, length);
+    });
+    try {
+      const hasher = new PasswordHasher();
+      const encoded = await hasher.hash("Hosted runtime password 42!");
+      await expect(hasher.verify("Hosted runtime password 42!", encoded)).resolves.toBe(true);
+      await expect(hasher.verify("wrong password", encoded)).resolves.toBe(false);
+    } finally { guarded.mockRestore(); }
+  });
+
+  it("verifies independent native scrypt and existing PBKDF2 fixtures", async () => {
+    const hasher = new PasswordHasher();
+    for (const encoded of ["scrypt$16384$8$5$00112233445566778899aabbccddeeff$5edd74b77f06058ba55939bc839ae4e16b54b2d4d751c3938e78720f809ec37b", "pbkdf2-sha256$600000$00112233445566778899aabbccddeeff$09a00e512872b32ec785cfedbd2d71935dd0f263df3188cf556947ee485adf9a"]) {
+      await expect(hasher.verify("Interoperability café password 42!", encoded)).resolves.toBe(true);
+      await expect(hasher.verify("wrong password", encoded)).resolves.toBe(false);
+    }
+  });
+
+  it("rejects malformed and unapproved password work factors without deriving", async () => {
+    const hasher = new PasswordHasher();
+    const encoded = "scrypt$16384$8$5$00112233445566778899aabbccddeeff$5edd74b77f06058ba55939bc839ae4e16b54b2d4d751c3938e78720f809ec37b";
+    for (const invalid of [encoded.replace("$16384$", "$1073741824$"),
+      encoded.replace("$5$", "$1$"), encoded.replace("$8$", "$8junk$"),
+      encoded.replace("00112233445566778899aabbccddeeff", "not-hex"), encoded + "00",
+      "pbkdf2-sha256$600000$00112233445566778899aabbccddeeff$09a00e512872b32ec785cfedbd2d71935dd0f263df3188cf556947ee485adf9a".replace("$600000$", "$600000junk$")]) {
+      await expect(hasher.verify("synthetic", invalid)).resolves.toBe(false);
+    }
   });
 
   it("generates opaque session tokens and deterministic SHA-256 hashes", async () => {

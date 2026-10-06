@@ -70,3 +70,5 @@ Complete real registration/login and authenticated production pilot checks only 
 Historical M17 offline acceptance remains recorded in docs/m17-production-resources.md. This M18 approval supersedes its pending production authorization and mandatory hosted staging prerequisite for the scope above.
 
 The Siteverify request uses the Workers-supported `manual` redirect mode and rejects every non-success HTTP status, including redirects. Its tests construct a native Worker request to check runtime options as well as the provider response.
+
+Production authentication uses native scrypt (N=16384, r=8, p=5; 16 MiB working memory with a 32 MiB allocation cap), one of the [OWASP password storage settings](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt). Hosted Workers limits PBKDF2 iterations below the previous 600000 setting. New accounts receive scrypt hashes; existing local PBKDF2 hashes retain verification support where their work factor is permitted. No production account or signing key is migrated or reset. Native interoperability and a simulated hosted PBKDF2 ceiling are release tests.
