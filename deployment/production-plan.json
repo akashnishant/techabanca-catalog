@@ -1,5 +1,5 @@
 {
-  "milestone": "M17 production resources — offline preparation",
+  "milestone": "M18 production management deployment",
   "accountId": "00e59d5fe6cfdd53bdc0b8594b5dc8fa",
   "databaseName": "techabanca-catalogue-production",
   "bucketName": "techabanca-catalogue-production-assets",
@@ -11,7 +11,12 @@
     "milestone": "M18",
     "managementHost": "catalogue.techabanca.com",
     "publicSuffix": "techabanca.com",
-    "configuredRoutes": []
+    "configuredRoutes": [
+      {
+        "pattern": "catalogue.techabanca.com",
+        "custom_domain": true
+      }
+    ]
   },
   "retention": {
     "days": 365,
@@ -32,14 +37,14 @@
     "publicBucketAccess": false
   },
   "release": {
-    "remoteMutations": false,
-    "deployable": false,
+    "remoteMutations": true,
+    "deployable": true,
+    "workflow": "local-tests-production-pilot",
     "requires": [
-      "Separate remote-resource approval",
-      "Completed hosted staging acceptance",
+      "Verified local regression suite and immutable production artifacts",
       "Verified production resource ownership and isolation",
-      "Production-only security bindings",
-      "M18 routing, DNS and TLS review"
+      "Production-only security bindings; authentication stays closed until Turnstile is configured",
+      "Management custom domain DNS and TLS verification; public wildcard remains pending"
     ]
   },
   "protected": {

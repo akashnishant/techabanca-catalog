@@ -1,0 +1,58 @@
+# M18 — production-only management deployment
+
+The user approved production deployment on 6 October 2026 at https://catalogue.techabanca.com. The release workflow is local development and regression testing, followed by a limited production pilot. Hosted staging is optional and is not a prerequisite for this approved release.
+
+## Scope and isolation
+
+- Management Worker: techabanca-catalogue-app, exact custom domain catalogue.techabanca.com.
+- Public Worker: techabanca-catalogue-public, deployed without public routes or workers.dev exposure. Business catalogue routing remains a separate pending step.
+- D1: techabanca-catalogue-production.
+- R2: techabanca-catalogue-production-assets, with r2.dev disabled and no public custom domains.
+- Preserve Billing's database, bucket, Worker, DNS and payment configuration. Preserve the company site and other existing applications.
+- Do not activate a broad *.techabanca.com route until existing host/route ownership and exclusions have been verified.
+- Do not enable unsubscribed publishing or reuse Billing security bindings.
+
+## Local PowerShell workflow
+
+Run from the repository root:
+
+~~~powershell
+.\scripts\Invoke-CatalogueProduction.ps1 -Action Provision
+.\scripts\Invoke-CatalogueProduction.ps1 -Action Verify
+.\scripts\Invoke-CatalogueProduction.ps1 -Action Check
+~~~
+
+Provision refuses unrecorded resource name collisions. Resource identifiers are recorded in ignored .wrangler/production/resources.json. Source Wrangler production configs retain placeholder IDs. The verified build substitutes only the recorded isolated database ID into the generated production configs and seals the complete files, migrations and performance evidence.
+
+Verify runs the normal local type checks, application, public Worker, domain, deployment and performance tests, then builds and dry-runs both production Workers. It does not require a hosted staging environment and does not mutate Cloudflare.
+
+## Security and activation
+
+A dedicated Cloudflare Turnstile widget must allow catalogue.techabanca.com. Use managed mode with pre-clearance disabled. The application verifies the token against the exact hostname, action and challenge timestamp.
+
+Store the site key and secret locally without putting the secret in chat or Git:
+
+~~~powershell
+.\scripts\Invoke-CatalogueProduction.ps1 -Action ConfigureSecurity
+.\scripts\Invoke-CatalogueProduction.ps1 -Action Deploy
+.\scripts\Invoke-CatalogueProduction.ps1 -Action Smoke
+~~~
+
+ConfigureSecurity prompts for the secret as a secure string. Production signing keys are generated once and kept in ignored .wrangler/production/security.json. Never delete this file after deploying; losing it must not silently regenerate keys. Upload files are short-lived, Git-ignored and removed after each Worker deploy. Wrangler deploy --secrets-file installs the bindings with the Worker version.
+
+If the widget cannot yet be configured, the explicitly named Bootstrap action deploys a closed pilot: the management URL, static application, health endpoint and isolated migrated resources are live, while registration and login return 503. This is a partial deployment, not completed authentication acceptance. Bootstrap refuses a locally recorded active deployment and a configured widget. It must never relax the application's fail-closed authentication.
+
+~~~powershell
+.\scripts\Invoke-CatalogueProduction.ps1 -Action Bootstrap
+.\scripts\Invoke-CatalogueProduction.ps1 -Action Smoke
+~~~
+
+Deploy requires all dedicated production security bindings before remote migrations or Worker upload. Both deployment actions require unchanged, locally verified artifacts and remotely verified database ownership and bucket privacy. No destructive cleanup action is exposed.
+
+## Acceptance and remaining release steps
+
+Record the Worker version IDs and source seal, DNS/TLS result, management UI checks, expected anonymous API responses, private storage checks and protected-host observations. Smoke distinguishes configured authentication from pending Turnstile and records this in ignored deployment evidence.
+
+Complete real registration/login and authenticated production pilot checks only after the dedicated Turnstile widget is active. Test public publishing only after safe business-host routing is configured. Commercial offers remain inactive; no Billing entitlement or payment changes are part of this deployment.
+
+Historical M17 offline acceptance remains recorded in docs/m17-production-resources.md. This M18 approval supersedes its pending production authorization and mandatory hosted staging prerequisite for the scope above.

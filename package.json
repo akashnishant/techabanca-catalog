@@ -30,6 +30,10 @@
     "production:plan": "node scripts/production.mjs plan",
     "production:build": "node scripts/production.mjs build",
     "production:verify": "node scripts/production.mjs verify",
-    "production:check": "node scripts/production.mjs check"
+    "production:check": "node scripts/production.mjs check",
+    "production:provision": "node scripts/production.mjs provision",
+    "production:bootstrap": "node scripts/production.mjs bootstrap",
+    "production:deploy": "node scripts/production.mjs deploy",
+    "production:smoke": "node scripts/production.mjs smoke"
   }
 }

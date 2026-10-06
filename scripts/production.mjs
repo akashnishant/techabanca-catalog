@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -38,11 +38,12 @@ export function readPlan() {
   assert.equal(plan.databaseName, "techabanca-catalogue-production");
   assert.equal(plan.bucketName, "techabanca-catalogue-production-assets");
   assert.deepEqual(plan.workers, { app: "techabanca-catalogue-app", public: "techabanca-catalogue-public" });
-  assert.deepEqual(plan.routing, { milestone: "M18", managementHost: "catalogue.techabanca.com", publicSuffix: "techabanca.com", configuredRoutes: [] });
+  assert.deepEqual(plan.routing, { milestone: "M18", managementHost: "catalogue.techabanca.com", publicSuffix: "techabanca.com", configuredRoutes: [{ pattern: "catalogue.techabanca.com", custom_domain: true }] });
   assert.deepEqual(plan.retention, { days: 365, cron: "0 3 * * *", worker: plan.workers.app });
   assert.deepEqual(plan.security, { app: ["ASSET_UPLOAD_SIGNING_SECRET", "AUTH_RATE_LIMIT_SECRET", "PUBLICATION_PREVIEW_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"], public: ["PUBLICATION_PREVIEW_SECRET"], publicBucketAccess: false });
-  assert.equal(plan.release.remoteMutations, false);
-  assert.equal(plan.release.deployable, false);
+  assert.equal(plan.release.remoteMutations, true);
+  assert.equal(plan.release.deployable, true);
+  assert.equal(plan.release.workflow, "local-tests-production-pilot");
   assert.equal(plan.protected.databaseId, BILLING_ID);
   return plan;
 }
@@ -60,7 +61,7 @@ export function validateResources(value, { stagingDatabaseId } = {}) {
   assert.equal(value.bucket.publicAccess, false, "Production assets must remain private");
   return value;
 }
-export function validateConfig(config, role) {
+export function validateConfig(config, role, resources = null) {
   assert(ROLES.includes(role), "Unknown Worker role");
   const plan = readPlan();
   for (const key of Object.keys(config)) assert(CONFIG_KEYS.has(key), "Unexpected configuration field: " + key);
@@ -68,7 +69,7 @@ export function validateConfig(config, role) {
   assert.equal(config.account_id, plan.accountId, "Wrong production account");
   assert.equal(config.workers_dev, false, "workers.dev must be disabled");
   assert.equal(config.preview_urls, false, "Version previews must be disabled");
-  assert.deepEqual(config.routes, [], "Routing belongs to M18");
+  assert.deepEqual(config.routes, role === "app" ? plan.routing.configuredRoutes : [], "Only the approved management custom domain is allowed");
   const expectedVars = role === "app"
     ? { DEPLOYMENT_ENVIRONMENT: "production", LOCAL_PREVIEW: "false", ALLOW_UNSUBSCRIBED_PUBLISHING: "false" }
     : { DEPLOYMENT_ENVIRONMENT: "production", LOCAL_PREVIEW: "false" };
@@ -79,8 +80,10 @@ export function validateConfig(config, role) {
   keys(db, ["binding", "database_name", "database_id", "migrations_dir"], "Unexpected database options");
   assert.equal(db.binding, "DB");
   assert.equal(db.database_name, plan.databaseName, "Wrong production database");
-  // Offline M17 outputs are always deliberately non-deployable.
-  assert.equal(db.database_id, ZERO_ID, "Offline build must retain its placeholder");
+  if (resources) {
+    validateResources(resources);
+    assert.equal(db.database_id, resources.database.id, "Production database differs from recorded resources");
+  } else assert.equal(db.database_id, ZERO_ID, "Offline build must retain its placeholder");
   assert.deepEqual(config.r2_buckets, [{ binding: "ASSETS", bucket_name: plan.bucketName }], "Unsafe production storage");
   assert.deepEqual(config.triggers ?? {}, role === "app" ? { crons: [plan.retention.cron] } : {}, "Unsafe retention schedule");
   if (role === "app") {
@@ -151,21 +154,22 @@ export function migrationInventory() {
   const folder = path.join(ROOT, "database/migrations");
   return fs.readdirSync(folder).filter(file => file.endsWith(".sql")).sort().map(file => ({ file: "database/migrations/" + file, sha256: digest(path.join(folder, file)) }));
 }
-export function validateManifest(manifest, hash = sourceHash()) {
-  assert.equal(manifest.version, 1);
+export function validateManifest(manifest, hash = sourceHash(), resources = resourceState()) {
+  assert.equal(manifest.version, 2);
   assert.equal(manifest.environment, "production");
-  assert.equal(manifest.deployable, false, "M17 preparation cannot authorize deployment");
+  assert.equal(manifest.deployable, !!resources, "Resource readiness changed since build");
+  assert.deepEqual(manifest.resources, resources, "Production resource evidence changed");
   assert.equal(manifest.remoteMutations, false);
   assert.equal(manifest.sourceHash, hash, "Source changed since production build");
   assert.equal(manifest.verifiedSourceHash, hash, "Run production verification");
   assert.deepEqual(manifest.migrations, migrationInventory(), "Migration inventory changed");
   keys(manifest.artifacts, ROLES, "Unexpected release roles");
-  for (const role of ROLES) validateArtifact(manifest.artifacts[role], role);
+  for (const role of ROLES) validateArtifact(manifest.artifacts[role], role, undefined, resources);
   const performance = checkBudgets(measureBuild(path.join(ROOT, "apps/catalogue-app/dist-production/client")));
   assert.deepEqual(manifest.performance, performance, "Performance evidence changed");
   return manifest;
 }
-export function validateArtifact(artifact, role, out = path.join(ROOT, "apps/catalogue-" + role + "/dist-production")) {
+export function validateArtifact(artifact, role, out = path.join(ROOT, "apps/catalogue-" + role + "/dist-production"), resources = null) {
   const configFile = inside(out, artifact.configFile);
   assert.equal(path.basename(configFile), "wrangler.json", "Wrong deployment configuration");
   const names = artifact.files.map(entry => entry.file);
@@ -179,7 +183,7 @@ export function validateArtifact(artifact, role, out = path.join(ROOT, "apps/cat
     assert(SHA.test(entry.sha256), "Invalid artifact digest");
     assert.equal(digest(file), entry.sha256, "Release artifact changed");
   }
-  const config = validateConfig(JSON.parse(fs.readFileSync(configFile, "utf8")), role);
+  const config = validateConfig(JSON.parse(fs.readFileSync(configFile, "utf8")), role, resources);
   assert.equal(config.d1_databases[0].migrations_dir, path.join(ROOT, "database/migrations"));
   assertRuntimePaths(config, configFile, out);
   return artifact;
@@ -199,7 +203,7 @@ export function dryRunArguments(configFile, outdir) {
   return ["deploy", "--dry-run", "--config", configFile, "--outdir", outdir];
 }
 export async function build({ verified = false } = {}) {
-  const before = sourceHash();
+  const before = sourceHash(), resources = resourceState();
   ROLES.forEach(sourceConfig);
   npm(["run", "build"], { env: { CLOUDFLARE_ENV: "production" } });
   const artifacts = {};
@@ -210,7 +214,8 @@ export async function build({ verified = false } = {}) {
     assert.equal(configs.length, 1, "Expected one production configuration");
     const file = configs[0], config = JSON.parse(fs.readFileSync(file, "utf8"));
     config.d1_databases[0].migrations_dir = path.join(ROOT, "database/migrations");
-    validateConfig(config, role);
+    if (resources) config.d1_databases[0].database_id = resources.database.id;
+    validateConfig(config, role, resources);
     assertRuntimePaths(config, file, out);
     fs.writeFileSync(file, JSON.stringify(config, null, 2) + "\n");
     runNode(path.join(ROOT, "node_modules/wrangler/bin/wrangler.js"), dryRunArguments(file, path.join(STATE, "dry-run", role)));
@@ -218,32 +223,212 @@ export async function build({ verified = false } = {}) {
   }
   const performance = checkBudgets(measureBuild(path.join(ROOT, "apps/catalogue-app/dist-production/client")));
   assert.equal(sourceHash(), before, "Source changed during production build");
-  const manifest = { version: 1, environment: "production", sourceHash: before,
-    verifiedSourceHash: verified ? before : null, deployable: false, remoteMutations: false,
+  const manifest = { version: 2, environment: "production", sourceHash: before,
+    verifiedSourceHash: verified ? before : null, deployable: !!resources, resources, remoteMutations: false,
     createdAt: new Date().toISOString(), migrations: migrationInventory(), performance, artifacts };
-  if (verified) validateManifest(manifest, before);
+  if (verified) validateManifest(manifest, before, resources);
   fs.mkdirSync(STATE, { recursive: true });
   fs.writeFileSync(path.join(STATE, "build-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
-  console.log("PRODUCTION_PREPARATION_PASSED " + JSON.stringify({ verified, deployable: false, remoteMutations: false, sourceHash: before, migrations: manifest.migrations.length, performance }));
+  console.log("PRODUCTION_PREPARATION_PASSED " + JSON.stringify({ verified, deployable: !!resources, remoteMutations: false, sourceHash: before, migrations: manifest.migrations.length, performance }));
   return manifest;
 }
 export function validateAction(action, extra = []) {
-  assert(["plan", "build", "verify", "check"].includes(action) && extra.length === 0,
-    "Use plan, build, verify or check. Remote actions are unavailable under the existing M8 approval block.");
+  assert(["plan", "build", "verify", "check", "provision", "bootstrap", "deploy", "smoke", "configure-security"].includes(action) && extra.length === 0,
+    "Use a documented production action without extra flags. Arbitrary remote actions are unavailable.");
   return action;
 }
 export async function main(action = "plan", extra = []) {
   validateAction(action, extra); readPlan();
+  if (action === "provision") { provision(); return; }
+  if (action === "bootstrap" || action === "deploy") { await deploy({ bootstrap: action === "bootstrap" }); return; }
+  if (action === "smoke") { await smoke(); return; }
+  if (action === "configure-security") { configureSecurity(); return; }
   if (action === "plan") { ROLES.forEach(sourceConfig); console.log(JSON.stringify(readPlan(), null, 2)); return; }
   if (action === "build") { await build(); return; }
   if (action === "check") {
     validateManifest(JSON.parse(fs.readFileSync(path.join(STATE, "build-manifest.json"), "utf8")));
-    console.log("Verified offline production artifacts are unchanged. Deployment remains blocked."); return;
+    console.log("Verified production artifacts are unchanged. Hosted authentication requires real Turnstile bindings."); return;
   }
   const before = sourceHash();
-  npm(["run", "staging:verify"], { env: { CLOUDFLARE_ENV: "" }, timeout: 900000 });
+  npm(["run", "verify"], { env: { CLOUDFLARE_ENV: "" }, timeout: 900000 });
   assert.equal(sourceHash(), before, "Source changed during verification");
   await build({ verified: true });
+}
+
+
+function writeState(name, value) {
+  fs.mkdirSync(STATE, { recursive: true });
+  fs.writeFileSync(path.join(STATE, name), JSON.stringify(value, null, 2) + "\n", { mode: 0o600 });
+}
+export function resourceState(required = false) {
+  const file = path.join(STATE, "resources.json");
+  if (!fs.existsSync(file)) {
+    assert(!required, "Provision the isolated production resources first");
+    return null;
+  }
+  const stagingFile = path.join(ROOT, ".wrangler/staging/resources.json");
+  const stagingDatabaseId = fs.existsSync(stagingFile)
+    ? JSON.parse(fs.readFileSync(stagingFile, "utf8")).database?.id : undefined;
+  return validateResources(JSON.parse(fs.readFileSync(file, "utf8")), { stagingDatabaseId });
+}
+function remote(args, { capture = false } = {}) {
+  const result = spawnSync(process.execPath, [path.join(ROOT, "node_modules/wrangler/bin/wrangler.js"), ...args], {
+    cwd: ROOT, encoding: "utf8", stdio: capture ? "pipe" : "inherit", timeout: 300000,
+    env: { ...process.env, CI: "true", WRANGLER_SEND_METRICS: "false", CLOUDFLARE_ACCOUNT_ID: ACCOUNT }
+  });
+  if (result.error) throw result.error;
+  assert.equal(result.status, 0, "Cloudflare operation failed: " + args.slice(0, 3).join(" "));
+  return result.stdout ?? "";
+}
+const databases = () => JSON.parse(remote(["d1", "list", "--json"], { capture: true }));
+const bucketNames = () => [...remote(["r2", "bucket", "list"], { capture: true }).matchAll(/^name:\s+(\S+)/gm)].map(match => match[1]);
+export function validateBucketPrivacy(devUrlOutput, domainOutput) {
+  assert(/Public access via the r2\.dev URL is disabled\./.test(devUrlOutput), "Production r2.dev access must be disabled");
+  assert(/There are no custom domains connected to this bucket\./.test(domainOutput), "Production storage must have no public custom domains");
+}
+function assertRemoteResources(resources) {
+  validateResources(resources);
+  const matches = databases().filter(db => db.name === resources.database.name);
+  assert(matches.length === 1 && matches[0].uuid === resources.database.id, "Production database ownership does not match");
+  assert(bucketNames().includes(resources.bucket.name), "Production storage bucket is missing");
+  validateBucketPrivacy(
+    remote(["r2", "bucket", "dev-url", "get", resources.bucket.name], { capture: true }),
+    remote(["r2", "bucket", "domain", "list", resources.bucket.name], { capture: true })
+  );
+}
+export function provision() {
+  const plan = readPlan(), recorded = resourceState();
+  if (recorded) { assertRemoteResources(recorded); console.log("Recorded production resources and storage privacy verified."); return recorded; }
+  let db = databases().find(value => value.name === plan.databaseName);
+  assert(!db, "An unrecorded production database already exists; inspect ownership before adopting it");
+  assert(!bucketNames().includes(plan.bucketName), "An unrecorded production bucket already exists; inspect ownership before adopting it");
+  remote(["d1", "create", plan.databaseName, "--update-config=false"]);
+  db = databases().find(value => value.name === plan.databaseName);
+  assert(db, "Production database creation did not complete");
+  remote(["r2", "bucket", "create", plan.bucketName]);
+  const resources = validateResources({ accountId: plan.accountId, database: { name: db.name, id: db.uuid },
+    bucket: { name: plan.bucketName, publicAccess: false } });
+  writeState("resources.json", resources);
+  assertRemoteResources(resources);
+  console.log("Isolated production resources are recorded and private.");
+  return resources;
+}
+export function validateSecrets(value, { requireTurnstile = true } = {}) {
+  keys(value, ["version", "app", "public"], "Unexpected security fields");
+  assert.equal(value.version, 1);
+  const hasSite = Object.hasOwn(value.app, "TURNSTILE_SITE_KEY"), hasSecret = Object.hasOwn(value.app, "TURNSTILE_SECRET_KEY");
+  assert(hasSite === hasSecret, "Turnstile configuration is incomplete");
+  keys(value.app, ["ASSET_UPLOAD_SIGNING_SECRET", "AUTH_RATE_LIMIT_SECRET", "PUBLICATION_PREVIEW_SECRET",
+    ...(hasSite ? ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"] : [])], "Unexpected app security bindings");
+  keys(value.public, ["PUBLICATION_PREVIEW_SECRET"], "Unexpected public security bindings");
+  const signing = ["ASSET_UPLOAD_SIGNING_SECRET", "AUTH_RATE_LIMIT_SECRET", "PUBLICATION_PREVIEW_SECRET"].map(key => value.app[key]);
+  assert(signing.every(secret => /^[a-f0-9]{64}$/i.test(secret ?? "")), "Invalid production signing configuration");
+  assert(new Set(signing.map(secret => secret.toLowerCase())).size === 3, "Production signing keys must be distinct");
+  assert(value.public.PUBLICATION_PREVIEW_SECRET === value.app.PUBLICATION_PREVIEW_SECRET, "Preview signing keys differ");
+  if (hasSite) {
+    assert(/^0x[a-zA-Z0-9_-]{20,100}$/.test(value.app.TURNSTILE_SITE_KEY ?? ""), "Invalid production Turnstile site key");
+    assert(typeof value.app.TURNSTILE_SECRET_KEY === "string" && value.app.TURNSTILE_SECRET_KEY.length >= 20
+      && value.app.TURNSTILE_SECRET_KEY.length <= 200 && !/\s/.test(value.app.TURNSTILE_SECRET_KEY), "Invalid production Turnstile secret");
+  }
+  assert(!requireTurnstile || hasSite, "Configure the dedicated production Turnstile widget before activating authentication");
+  return value;
+}
+function productionSecrets({ requireTurnstile = true } = {}) {
+  const file = path.join(STATE, "security.json"), ignored = relative(file);
+  assert.equal(git(["check-ignore", ignored]).trim(), ignored, "Production security file must be ignored by Git");
+  if (!fs.existsSync(file)) {
+    assert(!fs.existsSync(path.join(STATE, "deployment.json")), "Production security file is missing after deployment; do not regenerate signing keys");
+    const preview = randomBytes(32).toString("hex");
+    const value = { version: 1, app: { ASSET_UPLOAD_SIGNING_SECRET: randomBytes(32).toString("hex"),
+      AUTH_RATE_LIMIT_SECRET: randomBytes(32).toString("hex"), PUBLICATION_PREVIEW_SECRET: preview },
+      public: { PUBLICATION_PREVIEW_SECRET: preview } };
+    writeState("security.json", value);
+  }
+  return validateSecrets(JSON.parse(fs.readFileSync(file, "utf8")), { requireTurnstile });
+}
+function configureSecurity() {
+  const values = JSON.parse(fs.readFileSync(0, "utf8"));
+  keys(values, ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY"], "Unexpected Turnstile input");
+  const security = productionSecrets({ requireTurnstile: false });
+  security.app = { ...security.app, ...values };
+  validateSecrets(security);
+  writeState("security.json", security);
+  console.log("Dedicated production Turnstile bindings saved securely. Redeploy to activate them.");
+}
+
+export function validateActivation(security, bootstrap) {
+  validateSecrets(security, { requireTurnstile: !bootstrap });
+  if (bootstrap) assert(!Object.hasOwn(security.app, "TURNSTILE_SITE_KEY"),
+    "Authentication is configured; use deploy rather than a closed bootstrap");
+  return bootstrap ? "pending-turnstile" : "configured";
+}
+export function deploymentArguments(configFile, secretsFile) {
+  return ["deploy", "--config", configFile, "--secrets-file", secretsFile, "--strict"];
+}
+export async function deploy({ bootstrap = false } = {}) {
+  const resources = resourceState(true);
+  const manifest = validateManifest(JSON.parse(fs.readFileSync(path.join(STATE, "build-manifest.json"), "utf8")));
+  assert(manifest.deployable, "Production resource bindings are not deployable");
+  const security = productionSecrets({ requireTurnstile: !bootstrap });
+  const authentication = validateActivation(security, bootstrap);
+  const previousFile = path.join(STATE, "deployment.json");
+  if (bootstrap && fs.existsSync(previousFile)) {
+    const previous = JSON.parse(fs.readFileSync(previousFile, "utf8"));
+    assert(previous.authentication === "pending-turnstile", "Bootstrap must never regress active authentication");
+  }
+  assertRemoteResources(resources);
+  const configs = Object.fromEntries(ROLES.map(role => [role, path.join(ROOT, manifest.artifacts[role].configFile)]));
+  for (const role of ROLES) validateConfig(JSON.parse(fs.readFileSync(configs[role], "utf8")), role, resources);
+  remote(["d1", "migrations", "apply", resources.database.name, "--remote", "--config", configs.app]);
+  for (const role of ["public", "app"]) {
+    const file = path.join(STATE, "upload-secrets-" + role + ".json");
+    assert(!fs.existsSync(file), "A temporary secrets upload file already exists; inspect before continuing");
+    fs.writeFileSync(file, JSON.stringify(security[role]), { flag: "wx", mode: 0o600 });
+    try { remote(deploymentArguments(configs[role], file)); }
+    finally { fs.unlinkSync(file); }
+  }
+  writeState("deployment.json", { sourceHash: manifest.sourceHash, deployedAt: new Date().toISOString(),
+    resources, authentication, managementUrl: "https://" + readPlan().routing.managementHost,
+    publicRouting: "pending", smoke: "pending" });
+  console.log("PRODUCTION_DEPLOYED " + JSON.stringify({ authentication, managementUrl: "https://" + readPlan().routing.managementHost,
+    publicRouting: "pending", sourceHash: manifest.sourceHash }));
+}
+export async function smoke() {
+  const plan = readPlan(), security = productionSecrets({ requireTurnstile: false });
+  const configured = Object.hasOwn(security.app, "TURNSTILE_SITE_KEY"), origin = "https://" + plan.routing.managementHost;
+  const checks = [];
+  const request = async (pathname, status) => {
+    const response = await fetch(origin + pathname, { redirect: "manual", signal: AbortSignal.timeout(15000) });
+    assert.equal(response.status, status, "Unexpected HTTP status for " + pathname);
+    assert.equal(response.headers.get("x-techabanca-environment"), "production", "Wrong hosted environment");
+    assert.match(response.headers.get("x-robots-tag") ?? "", /noindex/);
+    checks.push({ pathname, status: response.status });
+    return response;
+  };
+  const home = await request("/", 200);
+  assert.match(await home.text(), /Techabanca/i);
+  assert.match(home.headers.get("cache-control") ?? "", /no-store/);
+  assert.match(home.headers.get("content-security-policy") ?? "", /default-src/);
+  assert.equal((await (await request("/api/health", 200)).json()).service, "techabanca-catalogue-app");
+  await request("/api/v1/auth/session", 401);
+  const auth = await request("/api/v1/auth/security", configured ? 200 : 503);
+  if (configured) {
+    const body = await auth.json();
+    assert(body.data?.enabled === true && body.data.siteKey === security.app.TURNSTILE_SITE_KEY, "Wrong hosted Turnstile configuration");
+  }
+  await request("/api/production-unknown", 404);
+  assert.match(await (await request("/robots.txt", 200)).text(), /Disallow: \//);
+  const state = { completedAt: new Date().toISOString(), origin, tls: "verified-by-fetch", checks,
+    authentication: configured ? "configured" : "pending-turnstile", publicRouting: "pending" };
+  writeState("smoke.json", state);
+  const deploymentFile = path.join(STATE, "deployment.json");
+  if (fs.existsSync(deploymentFile)) {
+    const deployment = JSON.parse(fs.readFileSync(deploymentFile, "utf8"));
+    deployment.smoke = "passed"; deployment.smokeCompletedAt = state.completedAt;
+    writeState("deployment.json", deployment);
+  }
+  console.log("PRODUCTION_SMOKE_PASSED " + JSON.stringify(state));
+  return state;
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url))
   main(process.argv[2] ?? "plan", process.argv.slice(3)).catch(error => { console.error(error.message); process.exitCode = 1; });

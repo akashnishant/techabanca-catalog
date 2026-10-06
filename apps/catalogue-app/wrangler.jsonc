@@ -69,7 +69,12 @@
       "name": "techabanca-catalogue-app",
       "workers_dev": false,
       "preview_urls": false,
-      "routes": [],
+      "routes": [
+        {
+          "pattern": "catalogue.techabanca.com",
+          "custom_domain": true
+        }
+      ],
       "d1_databases": [
         {
           "binding": "DB",
