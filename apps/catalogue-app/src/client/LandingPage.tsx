@@ -21,6 +21,7 @@ const faqs = [
   ["Do I need to build a website from scratch?", "No. The workspace includes a managed professional theme and guided business setup. Add your content and imagery, then prepare a private website preview for review."],
   ["Does creating an account publish my catalogue?", "No. Account creation and workspace setup do not publish a website or activate a paid subscription. Public website activation is being finalized for launch and remains a separate controlled step."],
   ["Can I change content without changing the live website immediately?", "Yes. Saved catalogue content and published revisions are separate. The preview and publication workflow lets you review a prepared revision before making it active, subject to publication availability."],
+  ["Will I be charged when I sign up or after a trial?", "No. Account creation requires no payment method. Eligible owners and admins can choose to start a 14-day trial from Subscription; it does not renew into a paid plan automatically. Paid subscriptions and their prices are not available yet. Public website activation remains a separate launch step."],
   ["Can I work from my phone?", "Yes. Catalogue is a responsive web application with desktop navigation and a compact mobile workspace. Use the same account in your browser; there is no separate app to install."],
 ];
 function Arrow() { return <span aria-hidden="true">↗</span>; }
@@ -39,7 +40,7 @@ export function LandingPage() {
         <Brand variant="dark" href="#top" label="Techabanca Catalogue home" />
         <button className="landing-menu" aria-expanded={menu} aria-controls="landing-nav" aria-label={menu ? "Close navigation" : "Open navigation"} onClick={() => setMenu(!menu)}>{menu ? "Close" : "Menu"} <span aria-hidden="true">{menu ? "−" : "+"}</span></button>
         <nav id="landing-nav" aria-label="Main navigation" className={menu ? "is-open" : ""} onKeyDown={e => { if(e.key === "Escape") { close(); document.querySelector<HTMLButtonElement>(".landing-menu")?.focus(); } }}>
-          <a href="#product" onClick={close}>Product</a><a href="#workflow" onClick={close}>Workflow</a><a href="#features" onClick={close}>Features</a><a href="#faq" onClick={close}>FAQs</a>
+          <a href="#product" onClick={close}>Product</a><a href="#workflow" onClick={close}>Workflow</a><a href="#features" onClick={close}>Features</a><a href="#pricing" onClick={close}>Pricing</a><a href="#faq" onClick={close}>FAQs</a>
           <a href="#signin" onClick={close}>Sign in</a><a className="landing-button landing-button-small" href="#signup" onClick={close}>Get started <Arrow /></a>
         </nav>
       </div>
@@ -106,6 +107,30 @@ export function LandingPage() {
         </div>
       </section>
 
+
+      <section className="landing-section landing-pricing" id="pricing" aria-labelledby="pricing-title">
+        <div className="landing-container">
+          <div className="landing-section-heading"><div><p className="landing-eyebrow">PRICING, WITH CLARITY</p><h2 id="pricing-title">A clear start.<br /><em>No unexpected charges.</em></h2></div><p>Create your workspace at no cost. Paid subscriptions are not available yet; plan prices will be published here when they launch.</p></div>
+          <div className="landing-pricing-grid">
+            <article className="landing-price-card" aria-labelledby="workspace-price-title">
+              <div className="landing-price-top"><p className="landing-eyebrow">AVAILABLE NOW</p><span className="landing-price-badge">Start here</span></div>
+              <h3 id="workspace-price-title">Workspace setup</h3><p className="landing-price"><span>₹0</span><span>to create your workspace</span></p>
+              <p className="landing-price-description">Bring your business and catalogue content together before you take the next step.</p>
+              <ul className="landing-checklist"><li>Set up your business profile</li><li>Organize products, services and categories</li><li>Maintain item details and custom fields</li><li>Use the workspace on desktop or mobile</li></ul>
+              <a className="landing-button landing-button-dark" href="#signup">Create your workspace <Arrow /></a><p className="landing-price-footnote">No payment method required for account creation.</p>
+            </article>
+            <article className="landing-price-card landing-price-future" aria-labelledby="paid-price-title">
+              <div className="landing-price-top"><p className="landing-eyebrow">NEXT CHAPTER</p><span className="landing-price-badge">Coming soon</span></div>
+              <h3 id="paid-price-title">Paid subscriptions</h3><p className="landing-price landing-price-announcement"><span>To be announced</span><span>prices and plan details</span></p>
+              <p className="landing-price-description">We’re preparing the paid plans. This page will show the available options and their prices when they are ready.</p>
+              <ul className="landing-checklist"><li>Paid checkout is not available yet</li><li>No paid subscription starts at signup</li><li>A trial does not become a paid plan automatically</li><li>Public website activation is being finalized</li></ul>
+              <a className="landing-text-link" href="#product">Explore the product <Arrow /></a><p className="landing-price-footnote">Your workspace is the first step. Publishing remains separate.</p>
+            </article>
+          </div>
+          <aside className="landing-trial-note" aria-labelledby="trial-note-title"><span className="landing-trial-days" aria-hidden="true">14<span>DAYS</span></span><div><h3 id="trial-note-title">An optional 14-day trial</h3><p>Eligible workspace owners and admins can start a trial explicitly from Subscription. No card is required, and there is no automatic paid renewal. Creating an account does not start the trial or publish a website.</p></div><a className="landing-text-link" href="#signin">Sign in to check eligibility <Arrow /></a></aside>
+        </div>
+      </section>
+
       <section className="landing-section" id="faq">
         <div className="landing-container landing-faq">
           <div><p className="landing-eyebrow">GOOD QUESTIONS</p><h2>Before you<br /><em>get started.</em></h2><p className="landing-lead">A little clarity for the next step.</p></div>
@@ -115,6 +140,6 @@ export function LandingPage() {
 
       <section className="landing-final"><div className="landing-container"><div><p className="landing-eyebrow">YOUR OFFER DESERVES A BETTER HOME.</p><h2>Show what you do.<br /><em>Make it worth exploring.</em></h2></div><div><a className="landing-button landing-button-dark" href="#signup">Create your workspace <Arrow /></a><p>Account creation does not publish a website.</p></div></div></section>
     </main>
-    <footer className="landing-footer"><div className="landing-container"><div className="landing-footer-grid"><div><Brand variant="dark" href="#top" label="Techabanca Catalogue home" /><p>A considered workspace for your products,<br />services and next customer conversation.</p></div><div><strong>CATALOGUE</strong><a href="#product">Product tour</a><a href="#features">Features</a><a href="#faq">FAQs</a></div><div><strong>WORKSPACE</strong><a href="#signin">Sign in</a><a href="#signup">Create account</a></div><div><strong>TECHABANCA</strong><a href="https://techabanca.com" target="_blank" rel="noreferrer">Company <Arrow /></a><a href="https://billing.techabanca.com" target="_blank" rel="noreferrer">Billing <Arrow /></a></div></div><div className="landing-footer-bottom"><span>© {new Date().getFullYear()} Techabanca Catalogue</span><span>Public website activation is being finalized for launch.</span></div></div></footer>
+    <footer className="landing-footer"><div className="landing-container"><div className="landing-footer-grid"><div><Brand variant="dark" href="#top" label="Techabanca Catalogue home" /><p>A considered workspace for your products,<br />services and next customer conversation.</p></div><div><strong>CATALOGUE</strong><a href="#product">Product tour</a><a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQs</a></div><div><strong>WORKSPACE</strong><a href="#signin">Sign in</a><a href="#signup">Create account</a></div><div><strong>TECHABANCA</strong><a href="https://techabanca.com" target="_blank" rel="noreferrer">Company <Arrow /></a><a href="https://billing.techabanca.com" target="_blank" rel="noreferrer">Billing <Arrow /></a></div></div><div className="landing-footer-bottom"><span>© {new Date().getFullYear()} Techabanca Catalogue</span><span>Public website activation is being finalized for launch.</span></div></div></footer>
   </div>;
 }
