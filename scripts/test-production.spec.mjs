@@ -14,8 +14,9 @@ function config(role) {
 function resources() {
   return { accountId: plan.accountId, database: { name: plan.databaseName, id }, bucket: { name: plan.bucketName, publicAccess: false } };
 }
-test("production-only release allows only the approved management custom domain", () => {
+test("production-only release allows the management domain and exact approved business pilot", () => {
   assert.deepEqual(plan.routing.configuredRoutes, [{ pattern: "catalogue.techabanca.com", custom_domain: true }]);
+  assert.deepEqual(plan.routing.publicRoutes, [{ pattern: "example-industries.techabanca.com", custom_domain: true }]);
   assert.equal(plan.release.workflow, "local-tests-production-pilot");
   assert.equal(plan.release.remoteMutations, true);
   assert.equal(plan.release.deployable, true);
@@ -220,3 +221,9 @@ test("production uploads install secrets atomically and respect explicit config"
   assert.deepEqual(deploymentArguments("config.json", "private.json"),
     ["deploy", "--config", "config.json", "--secrets-file", "private.json", "--strict"]);
 });
+
+for (const host of ["billing.techabanca.com", "billing-api.techabanca.com", "catalogue.techabanca.com", "www.techabanca.com", "techabanca.com", "other-business.techabanca.com", "EXAMPLE-INDUSTRIES.techabanca.com", "nested.example-industries.techabanca.com", "*.techabanca.com", "example-industries.techabanca.com/*"])
+  test("public pilot routing refuses " + host, () => {
+    const value = config("public"); value.routes = [{ pattern: host, custom_domain: true }];
+    assert.throws(() => validateConfig(value, "public"));
+  });

@@ -38,7 +38,7 @@ export function readPlan() {
   assert.equal(plan.databaseName, "techabanca-catalogue-production");
   assert.equal(plan.bucketName, "techabanca-catalogue-production-assets");
   assert.deepEqual(plan.workers, { app: "techabanca-catalogue-app", public: "techabanca-catalogue-public" });
-  assert.deepEqual(plan.routing, { milestone: "M18", managementHost: "catalogue.techabanca.com", publicSuffix: "techabanca.com", configuredRoutes: [{ pattern: "catalogue.techabanca.com", custom_domain: true }] });
+  assert.deepEqual(plan.routing, { milestone: "M18", managementHost: "catalogue.techabanca.com", publicSuffix: "techabanca.com", configuredRoutes: [{ pattern: "catalogue.techabanca.com", custom_domain: true }], publicRoutes: [{ pattern: "example-industries.techabanca.com", custom_domain: true }] });
   assert.deepEqual(plan.retention, { days: 365, cron: "0 3 * * *", worker: plan.workers.app });
   assert.deepEqual(plan.security, { app: ["ASSET_UPLOAD_SIGNING_SECRET", "AUTH_RATE_LIMIT_SECRET", "PUBLICATION_PREVIEW_SECRET", "TURNSTILE_SECRET_KEY", "TURNSTILE_SITE_KEY"], public: ["PUBLICATION_PREVIEW_SECRET"], publicBucketAccess: false });
   assert.equal(plan.release.remoteMutations, true);
@@ -69,7 +69,7 @@ export function validateConfig(config, role, resources = null) {
   assert.equal(config.account_id, plan.accountId, "Wrong production account");
   assert.equal(config.workers_dev, false, "workers.dev must be disabled");
   assert.equal(config.preview_urls, false, "Version previews must be disabled");
-  assert.deepEqual(config.routes, role === "app" ? plan.routing.configuredRoutes : [], "Only the approved management custom domain is allowed");
+  assert.deepEqual(config.routes, role === "app" ? plan.routing.configuredRoutes : plan.routing.publicRoutes, "Only the approved management and pilot business custom domains are allowed");
   const expectedVars = role === "app"
     ? { DEPLOYMENT_ENVIRONMENT: "production", LOCAL_PREVIEW: "false", ALLOW_UNSUBSCRIBED_PUBLISHING: "false" }
     : { DEPLOYMENT_ENVIRONMENT: "production", LOCAL_PREVIEW: "false" };

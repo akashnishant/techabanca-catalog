@@ -386,7 +386,7 @@ function AuthScreen({
           />
 
           <div className="relative">
-            <Brand variant="dark" />
+            <Brand variant="dark" href="/" label="Techabanca Catalogue home" />
           </div>
 
           <div className="relative mt-16 max-w-xl lg:my-auto">
@@ -435,7 +435,7 @@ function AuthScreen({
         <section className="flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
           <div className="w-full min-w-0 max-w-[520px]">
             <div className="mb-8 lg:hidden">
-              <Brand />
+              <Brand href="/" label="Techabanca Catalogue home" />
             </div>
 
             <a href="#top" className="mb-5 inline-flex min-h-11 items-center text-sm font-semibold text-[#46622b] underline">← Back to Catalogue</a>

@@ -16,6 +16,12 @@
         "pattern": "catalogue.techabanca.com",
         "custom_domain": true
       }
+    ],
+    "publicRoutes": [
+      {
+        "pattern": "example-industries.techabanca.com",
+        "custom_domain": true
+      }
     ]
   },
   "retention": {
@@ -44,7 +50,7 @@
       "Verified local regression suite and immutable production artifacts",
       "Verified production resource ownership and isolation",
       "Production-only security bindings; authentication stays closed until Turnstile is configured",
-      "Management custom domain DNS and TLS verification; public wildcard remains pending"
+      "Management and approved business custom domain DNS/TLS verification; public wildcard remains pending"
     ]
   },
   "protected": {

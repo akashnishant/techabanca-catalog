@@ -5,7 +5,7 @@ The user approved production deployment on 6 October 2026 at https://catalogue.t
 ## Scope and isolation
 
 - Management Worker: techabanca-catalogue-app, exact custom domain catalogue.techabanca.com.
-- Public Worker: techabanca-catalogue-public, deployed without public routes or workers.dev exposure. Business catalogue routing remains a separate pending step.
+- Public Worker: techabanca-catalogue-public, with the exact approved pilot custom domain example-industries.techabanca.com and no workers.dev exposure. Other business hosts and wildcard routing remain separate pending steps.
 - D1: techabanca-catalogue-production.
 - R2: techabanca-catalogue-production-assets, with r2.dev disabled and no public custom domains.
 - Preserve Billing's database, bucket, Worker, DNS and payment configuration. Preserve the company site and other existing applications.
@@ -72,3 +72,11 @@ Historical M17 offline acceptance remains recorded in docs/m17-production-resour
 The Siteverify request uses the Workers-supported `manual` redirect mode and rejects every non-success HTTP status, including redirects. Its tests construct a native Worker request to check runtime options as well as the provider response.
 
 Production authentication uses native scrypt (N=16384, r=8, p=5; 16 MiB working memory with a 32 MiB allocation cap), one of the [OWASP password storage settings](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html#scrypt). Hosted Workers limits PBKDF2 iterations below the previous 600000 setting. New accounts receive scrypt hashes; existing local PBKDF2 hashes retain verification support where their work factor is permitted. No production account or signing key is migrated or reset. Native interoperability and a simulated hosted PBKDF2 ceiling are release tests.
+
+## Example Industries production pilot
+
+On 6 October 2026 the user explicitly requested publication of the supplied Example Industries account at its reserved example-industries.techabanca.com address. Production configuration now permits this exact Public Worker custom domain alongside the existing management domain. The route allowlist rejects every other business host, protected application host, wildcard, nested host, and path route. No Billing or company-site routing is part of this pilot.
+
+Use the account’s existing owner publishing flow and an eligible explicitly started 14-day trial. Prepare and review the private snapshot before activation; do not change source items, invent account data, grant unsubscribed publishing, or activate paid plans. The pilot’s availability remains subject to its subscription entitlement.
+
+Code-only canonical Wrangler deployment preserves installed secret bindings. Record both Worker versions, route/DNS/TLS and anonymous/public-page acceptance, the immutable published revision, screenshot hashes, and protected-host comparisons. Do not save credentials, browser profiles, session cookies, or signed preview links in release evidence or Git.
