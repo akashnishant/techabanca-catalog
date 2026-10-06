@@ -406,7 +406,7 @@ function AuthScreen({
 
   return (
     <main className="min-h-screen bg-[#f2f6f3] text-[#081014] [&_a[href]]:cursor-pointer [&_button:not(:disabled)]:cursor-pointer [&_select:not(:disabled)]:cursor-pointer">
-      <div className="mx-auto grid min-h-screen w-full max-w-[1440px] lg:grid-cols-[1.02fr_0.98fr]">
+      <div className="mx-auto grid min-h-screen w-full max-w-[1440px] grid-cols-1 lg:grid-cols-[1.02fr_0.98fr]">
         <section className="relative overflow-hidden bg-[#0b1519] px-6 py-8 text-white sm:px-10 lg:flex lg:min-h-screen lg:flex-col lg:justify-between lg:px-14 lg:py-12">
           <div
             aria-hidden="true"
@@ -465,7 +465,7 @@ function AuthScreen({
         </section>
 
         <section className="flex items-center justify-center px-5 py-10 sm:px-8 lg:px-12">
-          <div className="w-full max-w-[520px]">
+          <div className="w-full min-w-0 max-w-[520px]">
             <div className="mb-8 lg:hidden">
               <Brand />
             </div>

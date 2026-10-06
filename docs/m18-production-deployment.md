@@ -49,6 +49,18 @@ If the widget cannot yet be configured, the explicitly named Bootstrap action de
 
 Deploy requires all dedicated production security bindings before remote migrations or Worker upload. Both deployment actions require unchanged, locally verified artifacts and remotely verified database ownership and bucket privacy. No destructive cleanup action is exposed.
 
+## Existing Turnstile widget
+
+Follow the guarded existing-widget flow at https://developers.cloudflare.com/turnstile/spin/prompt.md. Use a user-approved canonical Wrangler executable outside this repository, require version 4.109 or later, pin its exact version and the Catalogue account, and disable disk/debug logs before a secret-bearing command. Confirm the existing production Worker with secret list using the same configuration and environment as each secret write. Do not combine --name with --env when that would append an extra suffix; the approved production configuration already resolves the exact Worker name.
+
+Validate the widget site key, allowed hostnames and clearance level before retrieving its secret. Keep the secret in memory, validate it against Siteverify, and pass it through standard input to the existing ignored production secret store and the canonical Wrangler secret put command. Never print widget JSON, put secrets in arguments or exported environment variables, or use project package resolution for credential-bearing commands. Existing-widget recovery does not require temporary upload files.
+
+Catalogue uses TURNSTILE_SITE_KEY and TURNSTILE_SECRET_KEY. Production accepts only the exact request hostname catalogue.techabanca.com and the expected auth_login or auth_register action, including a current challenge timestamp. Localhost permissions on the widget do not relax the production backend. Preserve the widget mode and clearance level, existing hostnames, and the three unrelated production signing keys.
+
+The frontend retains each widget ID and calls turnstile.reset after a submission completes while the form remains active. Retries stay disabled until a fresh callback supplies a token. Changing authentication mode removes the old widget, and callbacks from the removed widget cannot unlock the new form.
+
+For an already-deployed Worker, canonical secret put activates the bindings. A subsequent code-only deploy of the verified production artifact preserves these installed secrets; do not retrieve or re-upload them just to deploy frontend changes. Acceptance requires a fresh real token through the protected backend, a successful request, and replay rejection. A dummy secret probe and binding-name checks alone are not end-to-end acceptance.
+
 ## Acceptance and remaining release steps
 
 Record the Worker version IDs and source seal, DNS/TLS result, management UI checks, expected anonymous API responses, private storage checks and protected-host observations. Smoke distinguishes configured authentication from pending Turnstile and records this in ignored deployment evidence.
