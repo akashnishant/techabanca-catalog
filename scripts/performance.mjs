@@ -3,7 +3,9 @@ import path from "node:path";
 import assert from "node:assert/strict";
 import { gzipSync } from "node:zlib";
 import { fileURLToPath, pathToFileURL } from "node:url";
-export const budgets = { initialJsBytes: 300000, initialJsGzip: 90000, totalJsBytes: 650000, totalJsGzip: 180000, cssBytes: 65000, cssGzip: 14000 };
+// The public landing page loads its own small stylesheet. The full CSS budget also
+// includes the separately loaded authoring workspace; image bytes include all demo screenshots.
+export const budgets = { initialJsBytes: 300000, initialJsGzip: 90000, totalJsBytes: 650000, totalJsGzip: 180000, initialCssBytes: 20000, initialCssGzip: 6000, cssBytes: 80000, cssGzip: 17000, imageBytes: 800000 };
 function files(directory) { return fs.readdirSync(directory, { withFileTypes: true }).flatMap(entry => entry.isDirectory() ? files(path.join(directory, entry.name)) : [path.join(directory, entry.name)]); }
 function inside(root, url, parent = root) {
   assert.ok(url.startsWith("/") || url.startsWith("./") || url.startsWith("../"), "Assets must use local build paths.");
@@ -36,7 +38,14 @@ export function measureBuild(directory) {
   const metric = paths => paths.reduce((total, file) => { const data = fs.readFileSync(file); total.bytes += data.length; total.gzip += gzipSync(data).length; return total; }, { bytes: 0, gzip: 0 });
   const built = files(root), js = metric(built.filter(file => file.endsWith(".js"))), css = metric(built.filter(file => file.endsWith(".css")));
   const entry = metric([...initial]);
-  return { initialJsBytes: entry.bytes, initialJsGzip: entry.gzip, totalJsBytes: js.bytes, totalJsGzip: js.gzip, cssBytes: css.bytes, cssGzip: css.gzip,
+  const styles = [...html.matchAll(/<link\b[^>]*>/g)].filter(match => /\brel="stylesheet"/.test(match[0])).map(match => {
+    const href = /\bhref="([^"]+\.css)"/.exec(match[0]);
+    assert.ok(href, "Stylesheet must reference local CSS.");
+    return inside(root, href[1]);
+  });
+  const initialCss = metric([...new Set(styles)]);
+  const imageBytes = built.filter(file => /\.(?:jpe?g|png|webp)$/i.test(file)).reduce((total, file) => total + fs.statSync(file).size, 0);
+  return { initialJsBytes: entry.bytes, initialJsGzip: entry.gzip, totalJsBytes: js.bytes, totalJsGzip: js.gzip, initialCssBytes: initialCss.bytes, initialCssGzip: initialCss.gzip, cssBytes: css.bytes, cssGzip: css.gzip, imageBytes,
     initialFiles: [...initial].map(file => path.relative(root, file).replaceAll("\\", "/")) };
 }
 export function checkBudgets(report) {

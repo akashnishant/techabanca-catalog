@@ -223,8 +223,6 @@ export function CatalogueManager({
     );
   const [items, setItems] =
     useState<AuthoringItem[]>([]);
-  const [catalogueId, setCatalogueId] =
-    useState<string | null>(null);
   const [nextCursor, setNextCursor] =
     useState<string | null>(null);
   const [loading, setLoading] =
@@ -299,9 +297,6 @@ export function CatalogueManager({
           return;
         }
 
-        setCatalogueId(
-          result.catalogueId,
-        );
         setItems(result.items);
         setNextCursor(
           result.nextCursor,
@@ -530,7 +525,7 @@ export function CatalogueManager({
                 Catalogue items
               </h1>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-[#6f7c77]">
-                Search, filter, and manage the authoring records that make up your business catalogue. Draft data remains separate from the public catalogue.
+                Search, filter, and manage the products and services in your business catalogue. Saved content remains separate from your published website.
               </p>
             </div>
 
@@ -762,7 +757,7 @@ export function CatalogueManager({
             <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[#74807b]">
               {activeFilterCount > 0
                 ? "Try a different search term or clear one of the active filters."
-                : "Create your first authoring record to begin building the catalogue."}
+                : "Add your first product or service to begin building the catalogue."}
             </p>
             {activeFilterCount > 0 ? (
               <button
@@ -1088,7 +1083,7 @@ export function CatalogueManager({
               <span className="font-bold text-[#344047]">
                 {items.length}
               </span>{" "}
-              authoring record
+              catalogue item
               {items.length === 1
                 ? ""
                 : "s"}
@@ -1115,10 +1110,7 @@ export function CatalogueManager({
         )}
 
         <div className="border-t border-[#e7ece9] bg-white px-5 py-3 text-[10px] leading-5 text-[#98a19d] sm:px-6">
-          Authoring statuses do not publish draft-table data directly. Public visibility remains controlled by the separate publishing read model.
-          {catalogueId
-            ? ` Catalogue ${catalogueId}.`
-            : ""}
+          Saved changes do not update the live website automatically. Review and publish website revisions in Website.
         </div>
       </section>
 
@@ -1172,7 +1164,7 @@ export function CatalogueManager({
                   <span className="font-semibold text-[#344047]">
                     {archiveTarget.name}
                   </span>{" "}
-                  will be removed from the active authoring list.
+                  will be removed from the active catalogue list.
                 </p>
               </div>
             </div>

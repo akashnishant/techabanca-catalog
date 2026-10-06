@@ -43,3 +43,23 @@ test("counts HTML module preloads and their dependencies in the initial graph", 
   fs.writeFileSync(path.join(root, "assets/shared.js"), "export const b=2;");
   assert.equal(measureBuild(root).initialFiles.length, 3);
 }));
+
+test("counts only linked CSS initially while retaining the full stylesheet budget", () => fixture(root => {
+  fs.writeFileSync(path.join(root, "index.html"), '<script src="/assets/index.js"></script><link rel="stylesheet" href="/assets/landing.css">');
+  fs.writeFileSync(path.join(root, "assets/index.js"), "export const a=1;");
+  fs.writeFileSync(path.join(root, "assets/landing.css"), "body{margin:0}");
+  fs.writeFileSync(path.join(root, "assets/workspace.css"), ".workspace{color:black}");
+  const report = measureBuild(root);
+  assert.equal(report.initialCssBytes, Buffer.byteLength("body{margin:0}"));
+  assert.ok(report.cssBytes > report.initialCssBytes);
+  checkBudgets(report);
+}));
+test("rejects excessive landing CSS and image payloads", () => fixture(root => {
+  fs.writeFileSync(path.join(root, "index.html"), '<script src="/assets/index.js"></script><link rel="stylesheet" href="/assets/landing.css">');
+  fs.writeFileSync(path.join(root, "assets/index.js"), "export const a=1;");
+  fs.writeFileSync(path.join(root, "assets/landing.css"), "a".repeat(20001));
+  assert.throws(() => checkBudgets(measureBuild(root)), /initialCssBytes exceeds/);
+  fs.writeFileSync(path.join(root, "assets/landing.css"), "body{margin:0}");
+  fs.writeFileSync(path.join(root, "assets/demo.jpg"), Buffer.alloc(800001));
+  assert.throws(() => checkBudgets(measureBuild(root)), /imageBytes exceeds/);
+}));

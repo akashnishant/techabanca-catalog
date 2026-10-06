@@ -932,7 +932,7 @@ export function AuthoringWorkspace({
                           Keep your business catalogue organised and ready to share.
                         </h1>
                         <p className="mt-3 max-w-2xl text-sm leading-6 text-[#68756f]">
-                          Your onboarding setup is complete. Catalogue authoring now uses the tenant-scoped Category, Item, and Attribute APIs without exposing draft data publicly.
+                          Your business setup is complete. Manage your products and services, organize categories, and prepare website updates from one workspace.
                         </p>
 
                         <div className="mt-6 flex flex-wrap gap-2">
@@ -994,7 +994,7 @@ export function AuthoringWorkspace({
                       detail={
                         snapshot?.hasMoreItems
                           ? "First 100 loaded; more items are available."
-                          : "Current active authoring records."
+                          : "Products and services in your catalogue."
                       }
                     />
                     <StatCard
@@ -1017,7 +1017,7 @@ export function AuthoringWorkspace({
                       value={String(
                         customAttributes,
                       )}
-                      detail="Tenant-owned catalogue attributes."
+                      detail="Fields customized for your business."
                     />
                   </div>
 
@@ -1091,13 +1091,13 @@ export function AuthoringWorkspace({
 
                     <section className="rounded-2xl border border-[#dfe5e2] bg-white p-5 shadow-[0_10px_32px_rgba(8,16,20,0.035)] sm:p-6">
                       <p className="text-xs font-black uppercase tracking-[0.13em] text-[#7a8782]">
-                        Authoring foundation
+                        Your next steps
                       </p>
                       <h2 className="mt-2 text-xl font-semibold tracking-[-0.025em]">
-                        Ready for focused management screens
+                        Keep your catalogue moving
                       </h2>
                       <p className="mt-3 text-sm leading-6 text-[#6f7c77]">
-                        The workspace client now speaks directly to the tenant-scoped Category, Item, and Attribute APIs. The next slices add focused management UI without changing this shell.
+                        Organize your collections, keep item details current, and review your website before publishing an update.
                       </p>
 
                       <div className="mt-5 space-y-3">
@@ -1112,7 +1112,7 @@ export function AuthoringWorkspace({
                           ],
                           [
                             "Item editor",
-                            "Details and typed fields",
+                            "Descriptions and specifications",
                           ],
                         ].map(
                           ([title, detail]) => (

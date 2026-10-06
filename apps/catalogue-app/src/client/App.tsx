@@ -1,3 +1,4 @@
+import "./styles.css";
 import {
   type FormEvent,
   lazy,
@@ -11,6 +12,7 @@ import {
   type AuthOrganization,
   type AuthUser,
 } from "./auth-api";
+import { Brand } from "./Brand";
 import { AuthChallenge } from "./AuthChallenge";
 import { DeferredSection } from "./DeferredSection";
 const AdminConsole = lazy(() => import("./AdminConsole").then(module => ({ default: module.AdminConsole })));
@@ -59,50 +61,6 @@ function messageForError(
   }
 
   return "Something went wrong. Please try again.";
-}
-
-// Techabanca master brand.
-// This mirrors the company-site geometry and wordmark.
-// Product UI work must not redesign or replace this mark.
-function Brand({
-  variant = "light",
-}: {
-  variant?: "light" | "dark";
-}) {
-  return (
-    <a
-      href="https://techabanca.com"
-      target="_blank"
-      rel="noreferrer"
-      aria-label="Techabanca website"
-      className={`catalogue-brand ${
-        variant === "dark"
-          ? "catalogue-brand--dark"
-          : "catalogue-brand--light"
-      }`}
-    >
-      <span
-        className="catalogue-brand-icon"
-        aria-hidden="true"
-      >
-        <span />
-        <span />
-        <span />
-      </span>
-
-      <span className="catalogue-brand-copy">
-        <span className="catalogue-brand-wordmark">
-          TECHABANCA
-          <span className="catalogue-brand-period">
-            .
-          </span>
-        </span>
-        <span className="catalogue-brand-product">
-          CATALOGUE
-        </span>
-      </span>
-    </a>
-  );
 }
 
 function EyeIcon({
@@ -301,7 +259,7 @@ function AuthScreen({
   onAuthenticated: () => Promise<void>;
 }) {
   const [mode, setMode] =
-    useState<AuthMode>("login");
+    useState<AuthMode>(() => window.location.hash === "#signup" ? "register" : "login");
   const [form, setForm] =
     useState<FormState>(EMPTY_FORM);
   const [busy, setBusy] = useState(false);
@@ -321,6 +279,15 @@ function AuthScreen({
   }, []);
   useEffect(() => { void loadSecurity(); }, [loadSecurity]);
 
+  useEffect(() => {
+    const change = () => {
+      const next = window.location.hash === "#signup" ? "register" : window.location.hash === "#signin" ? "login" : null;
+      if (next && next !== mode) { setMode(next); setForm(EMPTY_FORM); setChallengeToken(null); setError(null); }
+    };
+    window.addEventListener("hashchange", change);
+    return () => window.removeEventListener("hashchange", change);
+  }, [mode]);
+
   function patch(
     key: keyof FormState,
     value: string,
@@ -335,6 +302,7 @@ function AuthScreen({
     nextMode: AuthMode,
   ) {
     setMode(nextMode);
+    window.location.hash = nextMode === "register" ? "#signup" : "#signin";
     setChallengeToken(null);
     setError(securityFailed ? "Sign in is temporarily unavailable. Please retry." : null);
     setForm(EMPTY_FORM);
@@ -470,6 +438,7 @@ function AuthScreen({
               <Brand />
             </div>
 
+            <a href="#top" className="mb-5 inline-flex min-h-11 items-center text-sm font-semibold text-[#46622b] underline">← Back to Catalogue</a>
             <div className="rounded-2xl border border-black/[0.07] bg-white p-5 shadow-[0_24px_80px_rgba(8,16,20,0.08)] sm:p-8">
               <div className="rounded-2xl bg-[#eef3f0] p-1">
                 <div className="grid grid-cols-2 gap-1">
@@ -2570,6 +2539,7 @@ export function App() {
   async function logout() {
     await authApi.logout();
     setAuthenticated(null);
+    window.location.hash = "#signin";
   }
 
   if (loading) {
