@@ -8,6 +8,7 @@ import { about, catalogue, contact, home, itemDetail, unavailable, contactLinks 
 import { serveMedia } from "./media";
 import { faviconSvg } from "./brand";
 import { staticAsset } from "./static-assets";
+import { sitemap } from "./sitemap";
 import { captureEnquiry, EnquiryCaptureError, enquiryInput, readEnquiryForm, validateFormToken } from "./enquiry-capture";
 
 import { scheduleAnalytics, emitAnalytics, type AnalyticsPoint } from "./analytics";
@@ -96,9 +97,13 @@ app.all("*", async c => {
     if (!media) return html(request, unavailable(), 404);
     return serveMedia(request, c.env.ASSETS, media, !!preview);
   }
+  if (path.startsWith("/sitemap")) {
+    const result = await sitemap(request, site, host, repository, path);
+    return result ?? html(request, unavailable(), 404);
+  }
   if (path === "/robots.txt") {
     c.header("Content-Type", "text/plain; charset=utf-8");
-    return new Response(request.method === "HEAD" ? null : "User-agent: *\n" + (host.preview ? "Disallow: /\n" : "Allow: /\n"), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
+    return new Response(request.method === "HEAD" ? null : "User-agent: *\n" + (host.preview ? "Disallow: /\n" : "Allow: /\nDisallow: /preview/\nDisallow: /report\nDisallow: /go/\nSitemap: " + host.canonicalOrigin + "/sitemap.xml\n"), { headers: { "Content-Type": "text/plain; charset=utf-8" } });
   }
   if (path === "/report") {
     if (preview) return html(request, unavailable(), 404);
@@ -199,7 +204,7 @@ app.all("*", async c => {
     const sent = !!receipt && receipt.purpose === "receipt" && receipt.slug === site.slug && receipt.catalogueId === site.catalogue_public_id;
     const formToken = sent ? undefined : await token();
     await track([{ event: "catalogue_view" }, ...(formToken ? [{ event: "enquiry_started" as const, itemId: detail?.item.item_public_id }] : [])]);
-    return html(request, contact(site, host, detail?.item, { formToken, preview: !!preview, sent }));
+    return html(request, contact(site, host, detail?.item, { formToken, preview: !!preview, sent, noindex: url.searchParams.has("sent") || request.method !== "GET" && request.method !== "HEAD" }));
   }
   const itemMatch = /^\/items\/([^/]+)$/.exec(path);
   if (itemMatch) {

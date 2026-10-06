@@ -2,9 +2,8 @@ import { ENQUIRY_RETENTION_DAYS, type EnquiryInput, type EnquiryErrors } from "@
 import type { Category, Detail, Filters, Item, ItemPage, Site } from "./model";
 import { filterUrl, mediaUrl, type PublicHost } from "./routing";
 
-export function escapeHtml(value: unknown): string {
-  return String(value ?? "").replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]!);
-}
+import { breadcrumbs, escapeHtml, metadataText, structured } from "./seo";
+export { escapeHtml } from "./seo";
 const e = escapeHtml;
 import { masterBrandHtml as brand } from "./brand";
 function footer(site?: Site, host?: PublicHost): string {
@@ -45,31 +44,43 @@ function price(item: Item): string {
   try { return new Intl.NumberFormat("en-IN", { style: "currency", currency: item.currency_code, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(item.price_minor_units / 100); }
   catch { return item.currency_code + " " + (item.price_minor_units / 100).toFixed(2); }
 }
-function header(site: Site, path: string): string {
+function header(site: Site, path: string, schemaHost?: PublicHost): string {
   const links = [["/", "Home"], ["/catalogue", "Catalogue"]];
   if (site.show_about === 1) links.push(["/about", "About"]);
   if (site.show_contact === 1) links.push(["/contact", "Contact"]);
   const logo = site.logo_asset_public_id && site.logo_object_key
     ? '<img class="business-logo" src="' + e(mediaUrl(site, site.logo_asset_public_id)) + '" width="48" height="48" alt="">' : "";
-  return '<header class="site-header"><div class="wrap header-row"><a class="business-brand" href="/">' + logo + '<span><span class="business-name">'
+  return '<header class="site-header"' + (schemaHost ? ' itemscope itemtype="https://schema.org/Organization"' : '') + '>' + (schemaHost ? '<meta itemprop="url" content="' + e(schemaHost.canonicalOrigin + "/") + '">' : '') + '<div class="wrap header-row"><a class="business-brand" href="/">' + logo + '<span><span class="business-name"' + (schemaHost ? ' itemprop="name"' : '') + '>'
     + e(site.business_name) + '</span><span class="business-kind">' + (site.mode === "both" ? "Products &amp; services" : site.mode === "services" ? "Service catalogue" : "Product catalogue")
     + '</span></span></a><nav class="site-nav" aria-label="Main navigation">' + links.map(([href, label]) => '<a href="' + href + '"' + ((path === href || (href === "/catalogue" && /^\/(items|categories)\//.test(path))) ? ' aria-current="page"' : "") + ">" + label + "</a>").join("") + "</nav></div></header>";
 }
-export function document(site: Site | undefined, host: PublicHost | undefined, path: string, title: string, body: string, options: { description?: string; noindex?: boolean; image?: string } = {}): string {
-  const canonical = host ? host.canonicalOrigin + path : "";
-  const description = options.description ?? site?.seo_description ?? site?.hero_subtitle ?? "Explore products and services, view useful details and contact the business.";
+export function document(site: Site | undefined, host: PublicHost | undefined, path: string, title: string, body: string, options: { description?: string; noindex?: boolean; image?: string; imageAlt?: string; canonicalPath?: string; discover?: boolean; website?: boolean } = {}): string {
+  const discover = !!site && !!host && !host.privatePreview && options.discover !== false;
+  const canonical = discover ? host!.canonicalOrigin + (options.canonicalPath ?? path) : "";
+  const description = metadataText(options.description?.trim() || site?.seo_description?.trim() || site?.hero_subtitle?.trim(),
+    "Explore products and services, view useful details and contact the business.");
+  const pageTitle = metadataText(title, "Techabanca Catalogue", 200);
   const theme = site?.theme_code === "modern" ? "modern" : "professional";
+  const image = discover && !host!.preview ? options.image
+    || (site!.hero_asset_public_id && site!.hero_object_key ? mediaUrl(site!, site!.hero_asset_public_id) : undefined)
+    || (site!.logo_asset_public_id && site!.logo_object_key ? mediaUrl(site!, site!.logo_asset_public_id) : undefined) : undefined;
+  const imageAlt = options.image ? options.imageAlt || site?.business_name : site?.business_name;
+  const schema = discover && structured(host!) && !options.noindex;
   return '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
-    + '<meta name="robots" content="' + (!site || host?.preview || options.noindex ? "noindex,follow" : "index,follow") + '"><title>' + e(title) + '</title><meta name="description" content="' + e(description.slice(0, 300)) + '">'
+    + '<meta name="robots" content="' + (!site || host?.preview || options.noindex ? "noindex,follow" : "index,follow") + '"><title>' + e(pageTitle) + '</title><meta name="description" content="' + e(description) + '">'
     + (canonical ? '<link rel="canonical" href="' + e(canonical) + '"><meta property="og:url" content="' + e(canonical) + '">' : "")
-    + '<meta property="og:type" content="website"><meta property="og:title" content="' + e(title) + '"><meta property="og:description" content="' + e(description.slice(0, 300)) + '">'
-    + (options.image && host ? '<meta property="og:image" content="' + e(host.canonicalOrigin + options.image) + '">' : "")
+    + '<meta property="og:type" content="website"><meta property="og:title" content="' + e(pageTitle) + '"><meta property="og:description" content="' + e(description) + '">'
+    + (discover ? '<meta property="og:site_name" content="' + e(site!.business_name) + '">' : "")
+    + '<meta name="twitter:card" content="' + (image ? "summary_large_image" : "summary") + '"><meta name="twitter:title" content="' + e(pageTitle) + '"><meta name="twitter:description" content="' + e(description) + '">'
+    + (image ? '<meta property="og:image" content="' + e(host!.canonicalOrigin + image) + '"><meta property="og:image:alt" content="' + e(imageAlt) + '"><meta name="twitter:image" content="' + e(host!.canonicalOrigin + image) + '"><meta name="twitter:image:alt" content="' + e(imageAlt) + '">' : "")
     + '<meta name="theme-color" content="#0b1519"><link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="stylesheet" href="/theme.css?theme=' + theme + '"></head><body><a class="skip" href="#main">Skip to content</a>'
-    + (site ? header(site, path) : "") + '<main id="main">' + body + "</main>" + footer(site, host) + "</body></html>";
+    + (site ? header(site, path, schema ? host : undefined) : "") + '<main id="main">'
+    + (schema && options.website ? '<div itemscope itemtype="https://schema.org/WebSite"><meta itemprop="name" content="' + e(site!.business_name) + '"><meta itemprop="url" content="' + e(host!.canonicalOrigin + "/") + '">' : "")
+    + body + (schema && options.website ? "</div>" : "") + "</main>" + footer(site, host) + "</body></html>";
 }
 export function unavailable(title = "Catalogue unavailable", message = "This catalogue is not available right now. Please check the address or try again later.", site?: Site, host?: PublicHost, path = "/"): string {
   return document(site, host, path, title, '<section class="wrap unavailable"><div><span class="eyebrow">Techabanca Catalogue</span><h1>' + e(title)
-    + "</h1><p>" + e(message) + "</p>" + (site ? button("/catalogue", "Browse catalogue") : button("https://techabanca.com", "Visit Techabanca")) + "</div></section>", { noindex: true, description: message });
+    + "</h1><p>" + e(message) + "</p>" + (site ? button("/catalogue", "Browse catalogue") : button("https://techabanca.com", "Visit Techabanca")) + "</div></section>", { noindex: true, description: message, discover: false });
 }
 function card(site: Site, item: Item): string {
   const picture = item.cover_asset_public_id ? '<img class="card-picture" src="' + e(mediaUrl(site, item.cover_asset_public_id))
@@ -95,7 +106,7 @@ export function home(site: Site, host: PublicHost, categories: Category[], featu
   if (site.show_categories === 1 && categories.length) body += '<section class="section soft"><div class="wrap"><div class="section-heading"><div><span class="eyebrow">Find your fit</span><h2>Explore by category</h2></div></div><div class="category-grid">' + categories.map(categoryCard).join("") + "</div></div></section>";
   if (site.show_about === 1 && site.about_text) body += '<section class="wrap section"><div class="section-heading"><div><span class="eyebrow">Our business</span><h2>About ' + e(site.business_name) + '</h2></div><a class="text-link" href="/about">Learn more &rarr;</a></div><p class="prose">' + e(site.about_text.slice(0, 600)) + "</p></section>";
   if (site.show_contact === 1) body += '<section class="section soft"><div class="wrap section-heading"><div><span class="eyebrow">Let us help</span><h2>Have something in mind?</h2><p>Talk to us about availability, requirements or a quote.</p></div>' + button("/contact", "Contact us") + "</div></section>";
-  return document(site, host, "/", site.seo_title || site.business_name + " | " + site.name, body, { image: site.hero_asset_public_id ? mediaUrl(site, site.hero_asset_public_id) : undefined });
+  return document(site, host, "/", site.seo_title?.trim() || site.business_name + " | " + site.name, body, { website: true, image: site.hero_asset_public_id && site.hero_object_key ? mediaUrl(site, site.hero_asset_public_id) : undefined });
 }
 function searchForm(site: Site, categories: Category[], filters: Filters, path: string, fixedCategory?: Category): string {
   const categoriesField = site.show_categories === 1 && !fixedCategory ? '<div class="filter-field"><label for="category">Category</label><select id="category" name="category"><option value="">All categories</option>'
@@ -108,7 +119,7 @@ export function catalogue(site: Site, host: PublicHost, categories: Category[], 
   const path = category ? "/categories/" + encodeURIComponent(category.slug) : "/catalogue";
   const pages = Math.max(1, Math.ceil(page.total / page.pageSize));
   const title = category?.name || "Catalogue";
-  let body = '<section class="wrap page-top"><ol class="crumbs"><li><a href="/">Home</a></li>' + (category ? '<li><a href="/catalogue">Catalogue</a></li>' : "") + "<li>" + e(title) + "</li></ol><span class=\"eyebrow\">Products &amp; services</span><h1>"
+  let body = '<section class="wrap page-top">' + breadcrumbs(host, [["/", "Home"], ...(category ? [["/catalogue", "Catalogue"] as [string, string]] : []), [path, title]], !filters.query && filters.type === "all" && (!filters.category || !!category) && page.items.length > 0) + "<span class=\"eyebrow\">Products &amp; services</span><h1>"
     + e(title) + "</h1><p>" + e(category?.description || "Explore our products and services, then get in touch for availability or a quote.") + "</p></section><section class=\"wrap section\">" + searchForm(site, categories, filters, path, category)
     + '<p class="result-count" role="status">' + page.total + (page.total === 1 ? " result" : " results") + (filters.query ? " for “" + e(filters.query) + "”" : "") + (page.total ? " · Showing " + ((page.page - 1) * page.pageSize + 1) + "–" + Math.min(page.page * page.pageSize, page.total) : "") + "</p>";
   if (page.items.length) body += '<div class="cards">' + page.items.map(item => card(site, item)).join("") + "</div>";
@@ -116,32 +127,38 @@ export function catalogue(site: Site, host: PublicHost, categories: Category[], 
   if (pages > 1) body += '<nav class="pagination" aria-label="Catalogue pages">' + (page.page > 1 ? button(filterUrl(path, filters, page.page - 1), "Previous", "secondary") : "")
     + "<span>Page " + page.page + " of " + pages + "</span>" + (page.page < pages ? button(filterUrl(path, filters, page.page + 1), "Next", "secondary") : "") + "</nav>";
   body += "</section>";
-  return document(site, host, path, title + " | " + site.business_name, body, { noindex: !!filters.query || filters.type !== "all" || !!filters.category || filters.page > 1 });
+  return document(site, host, path, title + (page.page > 1 ? " – Page " + page.page : "") + " | " + site.business_name, body, {
+    canonicalPath: filterUrl(path, filters, page.page),
+    description: category?.description || "Browse " + (category ? category.name + " from " : "products and services from ") + site.business_name + ". Contact us for availability or a quote.",
+    noindex: !!filters.query || filters.type !== "all" || (!!filters.category && !category) || !page.items.length,
+  });
 }
 export function itemDetail(site: Site, host: PublicHost, categories: Category[], detail: Detail): string {
   const item = detail.item;
+  const schema = structured(host);
+  const prop = (name: string) => schema ? ' itemprop="' + name + '"' : "";
   const category = site.show_categories === 1 ? categories.find(category => category.category_public_id === item.category_public_id) : undefined;
   const path = "/items/" + encodeURIComponent(item.slug);
   const links = trackedContactLinks(site, host, item);
   const quote = site.show_contact === 1 ? "/contact?item=" + encodeURIComponent(item.slug) + "#enquiry" : links.whatsapp;
-  const gallery = detail.images.length ? '<div class="gallery" aria-label="Product images">' + detail.images.map(image => '<a href="' + e(mediaUrl(site, image.asset_public_id)) + '" target="_blank" rel="noopener" aria-label="Open image: ' + e(image.alt_text || item.name) + '"><img src="' + e(mediaUrl(site, image.asset_public_id)) + '" alt="' + e(image.alt_text || item.name) + '" width="640" height="480"' + (image === detail.images[0] ? ' fetchpriority="high"' : ' loading="lazy"') + "></a>").join("") + "</div>"
+  const gallery = detail.images.length ? '<div class="gallery" aria-label="Product images">' + detail.images.map(image => '<a href="' + e(mediaUrl(site, image.asset_public_id)) + '" target="_blank" rel="noopener" aria-label="Open image: ' + e(image.alt_text || item.name) + '"><img' + prop("image") + ' src="' + e(mediaUrl(site, image.asset_public_id)) + '" alt="' + e(image.alt_text || item.name) + '" width="640" height="480"' + (image === detail.images[0] ? ' fetchpriority="high"' : ' loading="lazy"') + "></a>").join("") + "</div>"
     : '<div class="hero-empty" aria-hidden="true"><span>' + (item.item_type === "service" ? "Service" : "Product") + "</span><p>" + e(item.name) + "</p></div>";
-  let body = '<section class="wrap page-top"><ol class="crumbs"><li><a href="/">Home</a></li><li><a href="/catalogue">Catalogue</a></li>' + (category ? '<li><a href="/categories/' + encodeURIComponent(category.slug) + '">' + e(category.name) + "</a></li>" : "") + "<li>" + e(item.name) + "</li></ol></section>"
-    + '<section class="wrap section"><div class="detail-grid">' + gallery + '<div><span class="eyebrow">' + (item.item_type === "service" ? "Service" : "Product") + '</span><h1 class="detail-title">' + e(item.name) + "</h1>"
-    + (item.sku ? '<p class="sku">SKU ' + e(item.sku) + "</p>" : "") + '<p class="detail-price">' + e(price(item)) + "</p>"
-    + (item.short_description ? '<p class="detail-description">' + e(item.short_description) + "</p>" : "") + '<div class="actions">'
+  let body = '<section class="wrap page-top">' + breadcrumbs(host, [["/", "Home"], ["/catalogue", "Catalogue"], ...(category ? [["/categories/" + encodeURIComponent(category.slug), category.name] as [string, string]] : []), [path, item.name]]) + "</section>"
+    + '<section class="wrap section"' + (schema ? ' itemscope itemtype="https://schema.org/' + (item.item_type === "service" ? "Service" : "Product") + '"' : '') + '>' + (schema ? '<meta itemprop="url" content="' + e(host.canonicalOrigin + path) + '">' : '') + '<div class="detail-grid">' + gallery + '<div><span class="eyebrow">' + (item.item_type === "service" ? "Service" : "Product") + '</span><h1 class="detail-title"' + prop("name") + '>' + e(item.name) + "</h1>"
+    + (item.sku ? '<p class="sku">SKU <span' + (item.item_type === "product" ? prop("sku") : "") + '>' + e(item.sku) + "</span></p>" : "") + '<p class="detail-price">' + e(price(item)) + "</p>"
+    + (item.short_description ? '<p class="detail-description"' + prop("description") + '>' + e(item.short_description) + "</p>" : "") + '<div class="actions">'
     + (quote ? button(quote, "Request a quote") : "") + (links.whatsapp ? button(links.whatsapp, "WhatsApp", "secondary") : "") + (links.call ? button(links.call, "Call", "secondary") : "") + "</div></div></div></section>";
   if (item.long_description) body += '<section class="wrap section"><h2>Details</h2><p class="prose">' + e(item.long_description) + "</p></section>";
   if (detail.attributes.length) body += '<section class="wrap section"><table class="specifications"><caption>Specifications</caption><tbody>' + detail.attributes.map(attribute => "<tr><th scope=\"row\">" + e(attribute.label) + "</th><td>" + e(attribute.value_text) + (attribute.unit_hint ? " " + e(attribute.unit_hint) : "") + "</td></tr>").join("") + "</tbody></table></section>";
   if (detail.documents.length) body += '<section class="wrap section"><h2>Documents</h2><ul class="documents">' + detail.documents.map(doc => '<li><a class="document-link" download href="' + e(mediaUrl(site, doc.asset_public_id)) + '"><span>' + e(doc.label || "Product document") + "</span><span>PDF · Download &darr;</span></a></li>").join("") + "</ul></section>";
-  return document(site, host, path, item.name + " | " + site.business_name, body, { description: item.short_description || undefined, image: item.cover_asset_public_id ? mediaUrl(site, item.cover_asset_public_id) : undefined });
+  return document(site, host, path, item.name + " | " + site.business_name, body, { description: item.short_description || item.long_description || "Learn about " + item.name + " from " + site.business_name + ". Contact us for details or a quote.", image: item.cover_asset_public_id ? mediaUrl(site, item.cover_asset_public_id) : undefined, imageAlt: detail.images[0]?.alt_text || item.name });
 }
 export function about(site: Site, host: PublicHost): string {
   const body = '<section class="wrap page-top"><span class="eyebrow">Our business</span><h1>About ' + e(site.business_name) + "</h1></section><section class=\"wrap section\"><p class=\"prose\">" + e(site.about_text || "Explore our catalogue to learn more about the products and services we offer.")
     + '</p><div class="actions">' + button("/catalogue", "Explore catalogue") + (site.show_contact === 1 ? button("/contact", "Get in touch", "secondary") : "") + "</div></section>";
-  return document(site, host, "/about", "About | " + site.business_name, body);
+  return document(site, host, "/about", "About | " + site.business_name, body, { description: site.about_text || "Learn about " + site.business_name + " and explore our catalogue." });
 }
-type ContactForm = { formToken?: string; values?: EnquiryInput; errors?: EnquiryErrors; notice?: string; preview?: boolean; sent?: boolean };
+type ContactForm = { formToken?: string; values?: EnquiryInput; errors?: EnquiryErrors; notice?: string; preview?: boolean; sent?: boolean; noindex?: boolean };
 function enquiryForm(site: Site, options: ContactForm, item?: Item): string {
   if (options.sent) return '<div class="enquiry-success" role="status"><h3>Enquiry sent</h3><p>Your enquiry is in ' + e(site.business_name)
     + '&rsquo;s inbox. The business can reply using the contact details you provided.</p>' + button("/contact#enquiry", "Send another enquiry", "secondary") + "</div>";
@@ -188,5 +205,5 @@ export function contact(site: Site, host: PublicHost, item?: Item, options: Cont
     + (links.whatsapp ? button(links.whatsapp, "Enquire on WhatsApp") : "") + (links.email ? button(links.email, "Enquire by email", "secondary") : "") + (links.call ? button(links.call, "Call us", "secondary") : "")
     + (!links.whatsapp && !links.email && !links.call ? "<p>No direct enquiry channel is currently available. Please check back soon.</p>" : "")
     + '</div><p class="contact-note">Choose a contact option above, or send your enquiry here.</p>' + enquiryForm(site, options, item) + '</div></section>';
-  return document(site, host, "/contact", "Contact | " + site.business_name, body, { noindex: !!item });
+  return document(site, host, "/contact", "Contact | " + site.business_name, body, { description: "Contact " + site.business_name + " for availability, product details or a quote.", noindex: !!item || !!options.noindex || !!options.sent || !!options.values || !!options.notice || !!options.errors });
 }

@@ -14,5 +14,5 @@ export function reportPage(site:Site,host:PublicHost,options:{token?:string;noti
     +'<div hidden aria-hidden="true"><label>Website<input name="companyWebsite" tabindex="-1" autocomplete="off"></label></div>'
     +'<button type="submit" class="button">Send report</button></form>':'<p class="notice">Reporting is temporarily unavailable. Please try again later.</p>')
   +'</section>';
- return document(site,host,"/report","Report this catalogue",body,{noindex:true});
+ return document(site,host,"/report","Report this catalogue",body,{noindex:true,discover:false});
 }

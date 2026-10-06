@@ -72,7 +72,7 @@ export function validateConfig(config, role, { allowPlaceholder = false, plan = 
 }
 function runNode(script, args, options = {}) {
   const result = spawnSync(process.execPath, [script, ...args], {
-    cwd: ROOT, encoding: "utf8", timeout: 300000,
+    cwd: ROOT, encoding: "utf8", timeout: options.timeout ?? 300000,
     env: { ...process.env, CI: "true", CLOUDFLARE_ACCOUNT_ID: ACCOUNT, ...options.env },
     ...(options.input === undefined ? {} : { input: options.input }),
     stdio: options.capture || options.input !== undefined ? "pipe" : "inherit",
@@ -91,10 +91,10 @@ function runNode(script, args, options = {}) {
   return result.stdout ?? "";
 }
 const wrangler = (args, options) => runNode(path.join(ROOT, "node_modules/wrangler/bin/wrangler.js"), args, options);
-function npm(args, env = {}) {
+function npm(args, env = {}, timeout = 300000) {
   const npmCli = process.env.npm_execpath ?? path.join(path.dirname(process.execPath), "node_modules/npm/bin/npm-cli.js");
   assert(fs.existsSync(npmCli), "npm CLI could not be found");
-  return runNode(npmCli, args, { env });
+  return runNode(npmCli, args, { env, timeout });
 }
 function git(args) {
   const result = spawnSync("git", args, { cwd: ROOT, encoding: "utf8", timeout: 30000 });
@@ -285,7 +285,7 @@ async function main(action) {
   if (action === "build") { await build(); return; }
   if (action === "verify") {
     const hash = sourceHash();
-    npm(["run", "verify"], { CLOUDFLARE_ENV: "" });
+    npm(["run", "verify"], { CLOUDFLARE_ENV: "" }, 600000);
     assert.equal(sourceHash(), hash, "Source changed during verification");
     await build({ verified: true });
     npm(["run", "performance:verify", "--", "--staging"]); return;

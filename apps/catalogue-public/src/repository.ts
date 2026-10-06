@@ -66,6 +66,24 @@ export class PublicRepository {
       + "UNION ALL SELECT object_key, mime_type, 'document', label FROM published_item_documents WHERE publication_id = ? AND asset_public_id = ? LIMIT 1",
     ).bind(site.publication_id, assetId, site.publication_id, assetId, site.publication_id, assetId, site.publication_id, assetId).first<Media>();
   }
+  private sitemapCategoryWhere(): string {
+    return "c.publication_id = ? AND EXISTS (SELECT 1 FROM published_items i WHERE i.publication_id = c.publication_id AND "
+      + "(i.category_public_id = c.category_public_id OR i.category_public_id IN "
+      + "(SELECT child.category_public_id FROM published_categories child WHERE child.publication_id = c.publication_id AND child.parent_category_public_id = c.category_public_id)))";
+  }
+  async sitemapCounts(site: Site): Promise<{ items: number; categories: number }> {
+    const statements = [this.db.prepare("SELECT count(*) AS total FROM published_items WHERE publication_id = ?").bind(site.publication_id)];
+    if (site.show_categories === 1) statements.push(this.db.prepare("SELECT count(*) AS total FROM published_categories c WHERE " + this.sitemapCategoryWhere()).bind(site.publication_id));
+    const results = await this.db.batch(statements);
+    return { items: (results[0].results[0] as { total: number }).total,
+      categories: results[1] ? (results[1].results[0] as { total: number }).total : 0 };
+  }
+  async sitemapSlugs(site: Site, kind: "items" | "categories", page: number, pageSize: number): Promise<string[]> {
+    const sql = kind === "items"
+      ? "SELECT slug FROM published_items WHERE publication_id = ? ORDER BY slug LIMIT ? OFFSET ?"
+      : "SELECT c.slug FROM published_categories c WHERE " + this.sitemapCategoryWhere() + " ORDER BY c.slug LIMIT ? OFFSET ?";
+    return (await this.db.prepare(sql).bind(site.publication_id, pageSize, (page - 1) * pageSize).all<{ slug: string }>()).results.map(row => row.slug);
+  }
   async previewSite(slug: string, publicationId: string, expiresAt: string, now: string): Promise<Site | null> {
     return this.db.prepare(
       "SELECT pc.*, p.public_id AS publication_public_id, p.revision_number FROM catalogue_publications p "

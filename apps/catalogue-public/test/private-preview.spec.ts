@@ -57,7 +57,7 @@ describe("signed private publication previews",()=>{
   expect(listing).toContain('action="'+f.prefix+'/catalogue"');
   expect(listing).toContain(f.prefix+'/catalogue?');
   expect(detail).toContain(f.prefix+'/media/'+f.previewPublicationId+'/'+f.documentId);
-  expect(home).toContain('href="'+f.origin+'/"');expect(home).not.toContain('rel="canonical" href="'+f.origin+f.prefix);
+  expect(home).not.toContain('rel="canonical"');expect(home).not.toContain('property="og:url"');
   expect((await get(f,"/theme.css?theme=professional")).headers.get("Content-Type")).toContain("text/css");
   expect((await get(f,"/favicon.svg")).status).toBe(200);
   expect(await(await get(f,"/robots.txt")).text()).toContain("Disallow: /");
