@@ -14,7 +14,9 @@ The application and its Tailwind stylesheet load only when a workspace route is 
 
 ## Product images
 
-The five JPEGs in `apps/catalogue-app/public/marketing/catalogue` are captures of the actual locally running Catalogue application with synthetic **Forma Studio** records. They contain no real customer data. Desktop images are 1440 × 960; mobile is 390 × 844. Captions identify the images as illustrative demo records. The Website capture deliberately shows the local publication workflow; it is not evidence of an activated customer domain.
+The six JPEGs in `apps/catalogue-app/public/marketing/catalogue/example-industries` are native browser captures of the supplied Example Industries production account and its published website at https://example-industries.techabanca.com. The account’s existing LED TV item was reviewed and published as immutable revision 1 through its owner workflow and eligible 14-day trial. Desktop captures are 1440 × 960 and mobile is 390 × 844. Captions and alternative text identify the actual account and distinguish management views from the public website. No item, contact, media, password, or account data was invented or changed for the captures.
+
+The published website is the hero image and the fourth keyboard-accessible product-tour panel. The account’s publishing controls show its real production address and Published status. The previous local Forma Studio images were removed. Account-specific asset URLs and the updated social-preview image prevent cached local screenshots from being reused. This exact pilot business address is active; routing for additional business hosts and general launch activation remain separate work.
 
 When replacing a capture, wait for the specific data and media panels to finish loading before taking the screenshot. Keep images optimized and preserve their dimensions and meaningful alternative text. Do not stage browser profiles, account passwords, session cookies or preview tokens.
 

@@ -3,9 +3,10 @@ import { Brand } from "./Brand";
 import "./landing.css";
 
 const tour = [
-  { label: "Catalogue", file: "catalogue", title: "Your whole offer. Beautifully organized.", text: "Manage products and services together. Search your items, filter by category or status, and keep the details ready for your next update.", alt: "Catalogue workspace with six demo products and services, search, categories and status filters" },
-  { label: "Item details", file: "item", title: "Make every detail useful.", text: "Give each item a description, category, SKU and optional price. Add the specifications that matter to your business and decide what customers should see.", alt: "Real item editor for the Arc Lounge Chair demo product with descriptions, category and price controls" },
-  { label: "Website", file: "website", title: "Review first. Publish with intention.", text: "Keep saved content separate from the website revision. Prepare a private preview and review the exact version before a controlled publication.", alt: "Catalogue Website workspace showing preview and publication controls for a demo business" },
+  { label: "Catalogue", file: "catalogue", title: "Your whole offer. Beautifully organized.", text: "Manage products and services together. Search your items, filter by category or status, and keep the details ready for your next update.", alt: "Production Catalogue workspace for Example Industries with its LED TV product, search and status filters" },
+  { label: "Item details", file: "item", title: "Make every detail useful.", text: "Give each item a description, category, SKU and optional price. Add the specifications that matter to your business and decide what customers should see.", alt: "Production item editor for the LED TV product in the Example Industries account" },
+  { label: "Website", file: "website", title: "Review first. Publish with intention.", text: "Keep saved content separate from the website revision. Prepare a private preview and review the exact version before a controlled publication.", alt: "Production Website workspace showing the published Example Industries catalogue and its live business address" },
+  { label: "Published website", file: "published", title: "Your catalogue, ready to explore.", text: "See the published Example Industries catalogue. Its product details and customer pages show how reviewed content appears at a real business address.", alt: "Published Example Industries website showing its LED TV product and customer navigation" },
 ];
 const features = [
   ["01", "Products + services", "A physical product, a professional service, or both. Choose a catalogue that fits the way your business works."],
@@ -26,7 +27,7 @@ const faqs = [
 ];
 function Arrow() { return <span aria-hidden="true">↗</span>; }
 function Screen({ file, alt, eager = false }: { file: string; alt: string; eager?: boolean }) {
-  return <img src={`/marketing/catalogue/${file}.jpg`} alt={alt} width="1440" height="960" loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"} decoding="async" />;
+  return <img src={`/marketing/catalogue/example-industries/${file}.jpg`} alt={alt} width="1440" height="960" loading={eager ? "eager" : "lazy"} fetchPriority={eager ? "high" : "auto"} decoding="async" />;
 }
 export function LandingPage() {
   const [menu, setMenu] = useState(false), [selected, setSelected] = useState(0);
@@ -57,7 +58,7 @@ export function LandingPage() {
             <p className="landing-availability">Early access · Workspace setup is available.</p>
           </div>
           <div className="landing-hero-visual">
-            <figure className="landing-screen landing-hero-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>TECHABANCA CATALOGUE / WORKSPACE</span></div><Screen file="workspace" alt="Actual Techabanca Catalogue home workspace with Forma Studio demo items and navigation" eager /><figcaption>One place to shape what comes next. Actual application, demo data.</figcaption></figure>
+            <figure className="landing-screen landing-hero-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>TECHABANCA CATALOGUE / PUBLISHED WEBSITE</span></div><Screen file="published" alt="Published Example Industries catalogue website with its LED TV product" eager /><figcaption>Published Example Industries catalogue · Live production website.</figcaption></figure>
             <div className="landing-visual-note"><span className="landing-note-mark" aria-hidden="true">↗</span><div><strong>Your offer, in focus.</strong><span>Organize → Preview → Prepare to share</span></div></div>
           </div>
         </div>
@@ -69,7 +70,7 @@ export function LandingPage() {
           <div className="landing-section-heading"><div><p className="landing-eyebrow">A CLOSER LOOK</p><h2>Less scattered content.<br /><em>More business clarity.</em></h2></div><p>From your first item to the next website revision, see how the real Catalogue workspace brings the work together.</p></div>
           <div className="landing-tour-tabs" role="tablist" aria-label="Explore the Catalogue application">{tour.map((item,index) => <button key={item.file} ref={el => { tabs.current[index]=el; }} id={`tour-tab-${index}`} role="tab" aria-selected={selected===index} aria-controls="tour-panel" tabIndex={selected===index ? 0 : -1} onClick={()=>setSelected(index)} onKeyDown={e=>{let next=index;if(e.key==="ArrowRight")next=(index+1)%tour.length;else if(e.key==="ArrowLeft")next=(index+tour.length-1)%tour.length;else if(e.key==="Home")next=0;else if(e.key==="End")next=tour.length-1;else return;e.preventDefault();setSelected(next);tabs.current[next]?.focus();}}><span>0{index+1}</span>{item.label}<Arrow /></button>)}</div>
           <div id="tour-panel" role="tabpanel" aria-labelledby={`tour-tab-${selected}`} tabIndex={0}>
-            <figure className="landing-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>PRODUCT TOUR / {active.label.toUpperCase()}</span></div><Screen key={active.file} file={active.file} alt={active.alt} /><figcaption>Actual Catalogue application · Illustrative Forma Studio demo records.</figcaption></figure>
+            <figure className="landing-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>PRODUCT TOUR / {active.label.toUpperCase()}</span></div><Screen key={active.file} file={active.file} alt={active.alt} /><figcaption>Actual production Catalogue application · Example Industries account.</figcaption></figure>
             <div className="landing-tour-copy"><h3>{active.title}</h3><p>{active.text}</p></div>
           </div>
         </div>
@@ -89,7 +90,7 @@ export function LandingPage() {
       <section className="landing-section landing-detail">
         <div className="landing-container landing-split">
           <div><p className="landing-eyebrow">DETAILS THAT DO THE TALKING</p><h2>Make your offer<br /><em>easy to understand.</em></h2><p className="landing-lead">Give customers context, not just an item name. Keep descriptions, specifications, categories and optional prices in the same place.</p><ul className="landing-checklist"><li>Products and services in one catalogue</li><li>Business-specific fields and specifications</li><li>Images and supported item documents</li><li>Draft, hidden and featured item controls</li></ul></div>
-          <figure className="landing-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>ITEM DETAILS / DEMO PRODUCT</span></div><Screen file="item" alt="Arc Lounge Chair demo item in the Catalogue editor" /><figcaption>Actual item editor. Demo content, your business in practice.</figcaption></figure>
+          <figure className="landing-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>ITEM DETAILS / EXAMPLE INDUSTRIES</span></div><Screen file="item" alt="LED TV product in the production Example Industries Catalogue editor" /><figcaption>Actual production item editor · Example Industries account.</figcaption></figure>
         </div>
       </section>
 
@@ -103,7 +104,7 @@ export function LandingPage() {
       <section className="landing-section landing-dark landing-mobile-section">
         <div className="landing-container landing-split">
           <div><p className="landing-eyebrow">YOUR BUSINESS, WITH YOU</p><h2>A full workspace.<br /><em>A smaller screen.</em></h2><p className="landing-lead">Review your catalogue from the desk or pick up where you left off on your phone. The responsive workspace adapts to your browser.</p><div className="landing-proof"><span>✓ Same account</span><span>✓ No app to install</span></div><a className="landing-text-link" href="#signin">Return to your workspace <Arrow /></a></div>
-          <div className="landing-device-pair"><figure className="landing-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>DESKTOP WORKSPACE</span></div><Screen file="workspace" alt="Desktop view of the actual Catalogue workspace" /></figure><figure className="landing-phone"><div aria-hidden="true" className="landing-phone-speaker" /><img src="/marketing/catalogue/mobile.jpg" alt="Actual Catalogue home workspace in a mobile browser with compact navigation" width="390" height="844" loading="lazy" decoding="async" /><figcaption>Actual mobile view · Demo data</figcaption></figure></div>
+          <div className="landing-device-pair"><figure className="landing-screen"><div className="landing-screen-bar"><span aria-hidden="true">● ● ●</span><span>DESKTOP WORKSPACE</span></div><Screen file="workspace" alt="Desktop view of the actual Catalogue workspace" /></figure><figure className="landing-phone"><div aria-hidden="true" className="landing-phone-speaker" /><img src="/marketing/catalogue/example-industries/mobile.jpg" alt="Actual production Example Industries workspace in a mobile browser with compact navigation" width="390" height="844" loading="lazy" decoding="async" /><figcaption>Actual mobile view · Example Industries</figcaption></figure></div>
         </div>
       </section>
 
