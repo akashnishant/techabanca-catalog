@@ -1,0 +1,55 @@
+{
+  "milestone": "M17 production resources — offline preparation",
+  "accountId": "00e59d5fe6cfdd53bdc0b8594b5dc8fa",
+  "databaseName": "techabanca-catalogue-production",
+  "bucketName": "techabanca-catalogue-production-assets",
+  "workers": {
+    "app": "techabanca-catalogue-app",
+    "public": "techabanca-catalogue-public"
+  },
+  "routing": {
+    "milestone": "M18",
+    "managementHost": "catalogue.techabanca.com",
+    "publicSuffix": "techabanca.com",
+    "configuredRoutes": []
+  },
+  "retention": {
+    "days": 365,
+    "cron": "0 3 * * *",
+    "worker": "techabanca-catalogue-app"
+  },
+  "security": {
+    "app": [
+      "ASSET_UPLOAD_SIGNING_SECRET",
+      "AUTH_RATE_LIMIT_SECRET",
+      "PUBLICATION_PREVIEW_SECRET",
+      "TURNSTILE_SECRET_KEY",
+      "TURNSTILE_SITE_KEY"
+    ],
+    "public": [
+      "PUBLICATION_PREVIEW_SECRET"
+    ],
+    "publicBucketAccess": false
+  },
+  "release": {
+    "remoteMutations": false,
+    "deployable": false,
+    "requires": [
+      "Separate remote-resource approval",
+      "Completed hosted staging acceptance",
+      "Verified production resource ownership and isolation",
+      "Production-only security bindings",
+      "M18 routing, DNS and TLS review"
+    ]
+  },
+  "protected": {
+    "databaseId": "1bbac4e5-6c75-473d-a9d4-406f31b0abc4",
+    "databaseName": "billdesk-db",
+    "bucketName": "billdesk-files",
+    "worker": "billdesk",
+    "pages": [
+      "taxlume",
+      "techabanca-company"
+    ]
+  }
+}

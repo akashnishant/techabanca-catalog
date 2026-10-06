@@ -1,6 +1,7 @@
 node_modules/
 dist/
 apps/*/dist-staging/
+apps/*/dist-production/
 coverage/
 *.log
 .DS_Store

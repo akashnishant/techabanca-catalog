@@ -6,7 +6,7 @@ import { defineConfig } from "vite";
 export default defineConfig(({ command }) => {
   const sharedLocal = command === "serve" && !process.env.CLOUDFLARE_ENV && process.env.CATALOGUE_LOCAL_SHARED_WORKERS === "true";
   return {
-  build: { outDir: process.env.CLOUDFLARE_ENV === "staging" ? "dist-staging" : "dist" },
+  build: { outDir: process.env.CLOUDFLARE_ENV === "production" ? "dist-production" : process.env.CLOUDFLARE_ENV === "staging" ? "dist-staging" : "dist" },
   plugins: [
     react(),
     tailwindcss(),

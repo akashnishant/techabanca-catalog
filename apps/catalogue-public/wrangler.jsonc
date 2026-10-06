@@ -52,6 +52,31 @@
         "DEPLOYMENT_ENVIRONMENT": "staging",
         "LOCAL_PREVIEW": "false"
       }
+    },
+    "production": {
+      "name": "techabanca-catalogue-public",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "techabanca-catalogue-production",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "../../database/migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS",
+          "bucket_name": "techabanca-catalogue-production-assets"
+        }
+      ],
+      "vars": {
+        "DEPLOYMENT_ENVIRONMENT": "production",
+        "LOCAL_PREVIEW": "false"
+      },
+      "triggers": {}
     }
   }
 }

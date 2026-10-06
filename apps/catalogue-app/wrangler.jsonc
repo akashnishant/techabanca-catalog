@@ -64,6 +64,36 @@
           "0 3 * * *"
         ]
       }
+    },
+    "production": {
+      "name": "techabanca-catalogue-app",
+      "workers_dev": false,
+      "preview_urls": false,
+      "routes": [],
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "techabanca-catalogue-production",
+          "database_id": "00000000-0000-0000-0000-000000000000",
+          "migrations_dir": "../../database/migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS",
+          "bucket_name": "techabanca-catalogue-production-assets"
+        }
+      ],
+      "vars": {
+        "DEPLOYMENT_ENVIRONMENT": "production",
+        "LOCAL_PREVIEW": "false",
+        "ALLOW_UNSUBSCRIBED_PUBLISHING": "false"
+      },
+      "triggers": {
+        "crons": [
+          "0 3 * * *"
+        ]
+      }
     }
   },
   "triggers": {

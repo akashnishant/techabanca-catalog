@@ -18,7 +18,7 @@
     "cf-typegen": "npm run cf-typegen --workspaces --if-present",
     "db:migrations:list:local": "npx wrangler d1 migrations list techabanca-catalogue-local --local --persist-to .wrangler/state --config apps/catalogue-app/wrangler.jsonc",
     "db:migrate:local": "npx wrangler d1 migrations apply techabanca-catalogue-local --local --persist-to .wrangler/state --config apps/catalogue-app/wrangler.jsonc",
-    "test:deployment": "node --test scripts/test-staging.spec.mjs",
+    "test:deployment": "node --test scripts/test-staging.spec.mjs scripts/test-production.spec.mjs",
     "staging:plan": "node scripts/staging.mjs plan",
     "staging:build": "node scripts/staging.mjs build",
     "staging:verify": "node scripts/staging.mjs verify",
@@ -26,6 +26,10 @@
     "staging:deploy": "node scripts/staging.mjs deploy",
     "staging:smoke": "node scripts/staging.mjs smoke",
     "test:performance": "node --test scripts/test-performance.spec.mjs",
-    "performance:verify": "node scripts/performance.mjs"
+    "performance:verify": "node scripts/performance.mjs",
+    "production:plan": "node scripts/production.mjs plan",
+    "production:build": "node scripts/production.mjs build",
+    "production:verify": "node scripts/production.mjs verify",
+    "production:check": "node scripts/production.mjs check"
   }
 }
