@@ -336,7 +336,7 @@ function AuthScreen({
   ) {
     setMode(nextMode);
     setChallengeToken(null);
-    setError(null);
+    setError(securityFailed ? "Sign in is temporarily unavailable. Please retry." : null);
     setForm(EMPTY_FORM);
   }
 
